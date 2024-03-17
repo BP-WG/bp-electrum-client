@@ -6,14 +6,12 @@ use std::convert::TryFrom;
 use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
-
-use bitcoin::blockdata::block;
-use bitcoin::consensus::encode::deserialize;
-use bitcoin::hashes::{sha256, Hash};
-use bitcoin::hex::{DisplayHex, FromHex};
-use bitcoin::{Script, Txid};
+use amplify::hex;
+use amplify::hex::{FromHex, ToHex};
+use bpstd::{BlockHeader, ConsensusDecode, ConsensusDecodeError, ScriptPubkey, Txid};
 
 use serde::{de, Deserialize, Serialize};
+use sha2::Digest;
 
 static JSONRPC_2_0: &str = "2.0";
 
@@ -88,7 +86,7 @@ impl From<[u8; 32]> for Hex32Bytes {
 
 impl Hex32Bytes {
     pub(crate) fn to_hex(&self) -> String {
-        self.0.to_lower_hex_string()
+        self.0.to_hex()
     }
 }
 
@@ -106,9 +104,9 @@ pub trait ToElectrumScriptHash {
     fn to_electrum_scripthash(&self) -> ScriptHash;
 }
 
-impl ToElectrumScriptHash for Script {
+impl ToElectrumScriptHash for ScriptPubkey {
     fn to_electrum_scripthash(&self) -> ScriptHash {
-        let mut result = sha256::Hash::hash(self.as_bytes()).to_byte_array();
+        let mut result: [u8; 32] = sha2::Sha256::digest(self.as_slice()).into();
         result.reverse();
 
         result.into()
@@ -128,7 +126,7 @@ fn to_hex<S>(bytes: &[u8], serializer: S) -> std::result::Result<S::Ok, S::Error
 where
     S: serde::ser::Serializer,
 {
-    serializer.serialize_str(&bytes.to_lower_hex_string())
+    serializer.serialize_str(&bytes.to_hex())
 }
 
 fn from_hex_array<'de, T, D>(deserializer: D) -> Result<Vec<T>, D::Error>
@@ -151,12 +149,12 @@ where
     Ok(answer)
 }
 
-fn from_hex_header<'de, D>(deserializer: D) -> Result<block::Header, D::Error>
+fn from_hex_header<'de, D>(deserializer: D) -> Result<BlockHeader, D::Error>
 where
     D: de::Deserializer<'de>,
 {
     let vec: Vec<u8> = from_hex(deserializer)?;
-    deserialize(&vec).map_err(de::Error::custom)
+    BlockHeader::consensus_deserialize(&vec).map_err(de::Error::custom)
 }
 
 /// Response to a [`script_get_history`](../client/struct.Client.html#method.script_get_history) request.
@@ -214,7 +212,7 @@ pub struct GetHeadersRes {
     pub raw_headers: Vec<u8>,
     /// Array of block headers.
     #[serde(skip)]
-    pub headers: Vec<block::Header>,
+    pub headers: Vec<BlockHeader>,
 }
 
 /// Response to a [`script_get_balance`](../client/struct.Client.html#method.script_get_balance) request.
@@ -247,7 +245,7 @@ pub struct HeaderNotification {
     pub height: usize,
     /// Newly added header.
     #[serde(rename = "hex", deserialize_with = "from_hex_header")]
-    pub header: block::Header,
+    pub header: BlockHeader,
 }
 
 /// Notification of a new block header with the header encoded as raw bytes
@@ -266,7 +264,7 @@ impl TryFrom<RawHeaderNotification> for HeaderNotification {
     fn try_from(raw: RawHeaderNotification) -> Result<Self, Self::Error> {
         Ok(HeaderNotification {
             height: raw.height,
-            header: deserialize(&raw.header)?,
+            header: BlockHeader::consensus_deserialize(&raw.header)?,
         })
     }
 }
@@ -288,11 +286,11 @@ pub enum Error {
     /// Wraps `serde_json::error::Error`
     JSON(serde_json::error::Error),
     /// Wraps `bitcoin::hex::HexToBytesError`
-    Hex(bitcoin::hex::HexToBytesError),
+    Hex(hex::Error),
     /// Error returned by the Electrum server
     Protocol(serde_json::Value),
     /// Error during the deserialization of a Bitcoin data structure
-    Bitcoin(bitcoin::consensus::encode::Error),
+    Bitcoin(ConsensusDecodeError),
     /// Already subscribed to the notifications of an address
     AlreadySubscribed(ScriptHash),
     /// Not subscribed to the notifications of an address
@@ -381,8 +379,8 @@ macro_rules! impl_error {
 
 impl_error!(std::io::Error, IOError);
 impl_error!(serde_json::Error, JSON);
-impl_error!(bitcoin::hex::HexToBytesError, Hex);
-impl_error!(bitcoin::consensus::encode::Error, Bitcoin);
+impl_error!(hex::Error, Hex);
+impl_error!(ConsensusDecodeError, Bitcoin);
 
 impl<T> From<std::sync::PoisonError<T>> for Error {
     fn from(_: std::sync::PoisonError<T>) -> Self {

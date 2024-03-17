@@ -2,9 +2,7 @@
 
 use std::borrow::Borrow;
 use std::convert::TryInto;
-
-use bitcoin::consensus::encode::{deserialize, serialize};
-use bitcoin::{block, Script, Transaction, Txid};
+use bpstd::{BlockHeader, ConsensusDecode, ConsensusEncode, ScriptPubkey, Tx, Txid};
 
 use batch::Batch;
 use types::*;
@@ -12,8 +10,8 @@ use types::*;
 /// API calls exposed by an Electrum client
 pub trait ElectrumApi {
     /// Gets the block header for height `height`.
-    fn block_header(&self, height: usize) -> Result<block::Header, Error> {
-        Ok(deserialize(&self.block_header_raw(height)?)?)
+    fn block_header(&self, height: usize) -> Result<BlockHeader, Error> {
+        Ok(BlockHeader::consensus_deserialize(&self.block_header_raw(height)?)?)
     }
 
     /// Subscribes to notifications for new block headers, by sending a `blockchain.headers.subscribe` call.
@@ -30,41 +28,41 @@ pub trait ElectrumApi {
     }
 
     /// Gets the transaction with `txid`. Returns an error if not found.
-    fn transaction_get(&self, txid: &Txid) -> Result<Transaction, Error> {
-        Ok(deserialize(&self.transaction_get_raw(txid)?)?)
+    fn transaction_get(&self, txid: &Txid) -> Result<Tx, Error> {
+        Ok(Tx::consensus_deserialize(&self.transaction_get_raw(txid)?)?)
     }
 
     /// Batch version of [`transaction_get`](#method.transaction_get).
     ///
     /// Takes a list of `txids` and returns a list of transactions.
-    fn batch_transaction_get<'t, I>(&self, txids: I) -> Result<Vec<Transaction>, Error>
+    fn batch_transaction_get<'t, I>(&self, txids: I) -> Result<Vec<Tx>, Error>
     where
         I: IntoIterator + Clone,
         I::Item: Borrow<&'t Txid>,
     {
         self.batch_transaction_get_raw(txids)?
             .iter()
-            .map(|s| Ok(deserialize(s)?))
+            .map(|s| Ok(Tx::consensus_deserialize(s)?))
             .collect()
     }
 
     /// Batch version of [`block_header`](#method.block_header).
     ///
     /// Takes a list of `heights` of blocks and returns a list of headers.
-    fn batch_block_header<I>(&self, heights: I) -> Result<Vec<block::Header>, Error>
+    fn batch_block_header<I>(&self, heights: I) -> Result<Vec<BlockHeader>, Error>
     where
         I: IntoIterator + Clone,
         I::Item: Borrow<u32>,
     {
         self.batch_block_header_raw(heights)?
             .iter()
-            .map(|s| Ok(deserialize(s)?))
+            .map(|s| Ok(BlockHeader::consensus_deserialize(s)?))
             .collect()
     }
 
     /// Broadcasts a transaction to the network.
-    fn transaction_broadcast(&self, tx: &Transaction) -> Result<Txid, Error> {
-        let buffer: Vec<u8> = serialize(tx);
+    fn transaction_broadcast(&self, tx: &Tx) -> Result<Txid, Error> {
+        let buffer: Vec<u8> = tx.consensus_serialize();
         self.transaction_broadcast_raw(&buffer)
     }
 
@@ -107,7 +105,7 @@ pub trait ElectrumApi {
     ///
     /// Returns [`Error::AlreadySubscribed`](../types/enum.Error.html#variant.AlreadySubscribed) if
     /// already subscribed to the script.
-    fn script_subscribe(&self, script: &Script) -> Result<Option<ScriptStatus>, Error>;
+    fn script_subscribe(&self, script: &ScriptPubkey) -> Result<Option<ScriptStatus>, Error>;
 
     /// Batch version of [`script_subscribe`](#method.script_subscribe).
     ///
@@ -117,7 +115,7 @@ pub trait ElectrumApi {
     fn batch_script_subscribe<'s, I>(&self, scripts: I) -> Result<Vec<Option<ScriptStatus>>, Error>
     where
         I: IntoIterator + Clone,
-        I::Item: Borrow<&'s Script>;
+        I::Item: Borrow<&'s ScriptPubkey>;
 
     /// Subscribes to notifications for activity on a specific *scriptPubKey*.
     ///
@@ -125,13 +123,13 @@ pub trait ElectrumApi {
     ///
     /// Returns [`Error::NotSubscribed`](../types/enum.Error.html#variant.NotSubscribed) if
     /// not subscribed to the script.
-    fn script_unsubscribe(&self, script: &Script) -> Result<bool, Error>;
+    fn script_unsubscribe(&self, script: &ScriptPubkey) -> Result<bool, Error>;
 
-    /// Tries to pop one queued notification for a the requested script. Returns `None` if there are no items in the queue.
-    fn script_pop(&self, script: &Script) -> Result<Option<ScriptStatus>, Error>;
+    /// Tries to pop one queued notification for a requested script. Returns `None` if there are no items in the queue.
+    fn script_pop(&self, script: &ScriptPubkey) -> Result<Option<ScriptStatus>, Error>;
 
     /// Returns the balance for a *scriptPubKey*.
-    fn script_get_balance(&self, script: &Script) -> Result<GetBalanceRes, Error>;
+    fn script_get_balance(&self, script: &ScriptPubkey) -> Result<GetBalanceRes, Error>;
 
     /// Batch version of [`script_get_balance`](#method.script_get_balance).
     ///
@@ -139,10 +137,10 @@ pub trait ElectrumApi {
     fn batch_script_get_balance<'s, I>(&self, scripts: I) -> Result<Vec<GetBalanceRes>, Error>
     where
         I: IntoIterator + Clone,
-        I::Item: Borrow<&'s Script>;
+        I::Item: Borrow<&'s ScriptPubkey>;
 
     /// Returns the history for a *scriptPubKey*
-    fn script_get_history(&self, script: &Script) -> Result<Vec<GetHistoryRes>, Error>;
+    fn script_get_history(&self, script: &ScriptPubkey) -> Result<Vec<GetHistoryRes>, Error>;
 
     /// Batch version of [`script_get_history`](#method.script_get_history).
     ///
@@ -150,10 +148,10 @@ pub trait ElectrumApi {
     fn batch_script_get_history<'s, I>(&self, scripts: I) -> Result<Vec<Vec<GetHistoryRes>>, Error>
     where
         I: IntoIterator + Clone,
-        I::Item: Borrow<&'s Script>;
+        I::Item: Borrow<&'s ScriptPubkey>;
 
     /// Returns the list of unspent outputs for a *scriptPubKey*
-    fn script_list_unspent(&self, script: &Script) -> Result<Vec<ListUnspentRes>, Error>;
+    fn script_list_unspent(&self, script: &ScriptPubkey) -> Result<Vec<ListUnspentRes>, Error>;
 
     /// Batch version of [`script_list_unspent`](#method.script_list_unspent).
     ///
@@ -164,7 +162,7 @@ pub trait ElectrumApi {
     ) -> Result<Vec<Vec<ListUnspentRes>>, Error>
     where
         I: IntoIterator + Clone,
-        I::Item: Borrow<&'s Script>;
+        I::Item: Borrow<&'s ScriptPubkey>;
 
     /// Gets the raw bytes of a transaction with `txid`. Returns an error if not found.
     fn transaction_get_raw(&self, txid: &Txid) -> Result<Vec<u8>, Error>;

@@ -4,13 +4,12 @@ use std::{borrow::Borrow, sync::RwLock};
 
 use log::{info, warn};
 
-use bitcoin::{Script, Txid};
-
 use api::ElectrumApi;
 use batch::Batch;
 use config::Config;
 use raw_client::*;
 use std::convert::TryFrom;
+use bpstd::{ScriptPubkey, Txid};
 use types::*;
 
 /// Generalized Electrum client that supports multiple backends. This wraps
@@ -173,7 +172,7 @@ impl ElectrumApi for Client {
         method_name: &str,
         params: impl IntoIterator<Item = Param>,
     ) -> Result<serde_json::Value, Error> {
-        // We can't passthrough this method to the inner client because it would require the
+        // We can't pass through this method to the inner client because it would require the
         // `params` argument to also be `Copy` (because it's used multiple times for multiple
         // retries). To avoid adding this extra trait bound we instead re-direct this call to the internal
         // `RawClient::internal_raw_call_with_vec` method.
@@ -218,7 +217,7 @@ impl ElectrumApi for Client {
     }
 
     #[inline]
-    fn script_subscribe(&self, script: &Script) -> Result<Option<ScriptStatus>, Error> {
+    fn script_subscribe(&self, script: &ScriptPubkey) -> Result<Option<ScriptStatus>, Error> {
         impl_inner_call!(self, script_subscribe, script)
     }
 
@@ -226,23 +225,23 @@ impl ElectrumApi for Client {
     fn batch_script_subscribe<'s, I>(&self, scripts: I) -> Result<Vec<Option<ScriptStatus>>, Error>
     where
         I: IntoIterator + Clone,
-        I::Item: Borrow<&'s Script>,
+        I::Item: Borrow<&'s ScriptPubkey>,
     {
         impl_inner_call!(self, batch_script_subscribe, scripts.clone())
     }
 
     #[inline]
-    fn script_unsubscribe(&self, script: &Script) -> Result<bool, Error> {
+    fn script_unsubscribe(&self, script: &ScriptPubkey) -> Result<bool, Error> {
         impl_inner_call!(self, script_unsubscribe, script)
     }
 
     #[inline]
-    fn script_pop(&self, script: &Script) -> Result<Option<ScriptStatus>, Error> {
+    fn script_pop(&self, script: &ScriptPubkey) -> Result<Option<ScriptStatus>, Error> {
         impl_inner_call!(self, script_pop, script)
     }
 
     #[inline]
-    fn script_get_balance(&self, script: &Script) -> Result<GetBalanceRes, Error> {
+    fn script_get_balance(&self, script: &ScriptPubkey) -> Result<GetBalanceRes, Error> {
         impl_inner_call!(self, script_get_balance, script)
     }
 
@@ -250,13 +249,13 @@ impl ElectrumApi for Client {
     fn batch_script_get_balance<'s, I>(&self, scripts: I) -> Result<Vec<GetBalanceRes>, Error>
     where
         I: IntoIterator + Clone,
-        I::Item: Borrow<&'s Script>,
+        I::Item: Borrow<&'s ScriptPubkey>,
     {
         impl_inner_call!(self, batch_script_get_balance, scripts.clone())
     }
 
     #[inline]
-    fn script_get_history(&self, script: &Script) -> Result<Vec<GetHistoryRes>, Error> {
+    fn script_get_history(&self, script: &ScriptPubkey) -> Result<Vec<GetHistoryRes>, Error> {
         impl_inner_call!(self, script_get_history, script)
     }
 
@@ -264,13 +263,13 @@ impl ElectrumApi for Client {
     fn batch_script_get_history<'s, I>(&self, scripts: I) -> Result<Vec<Vec<GetHistoryRes>>, Error>
     where
         I: IntoIterator + Clone,
-        I::Item: Borrow<&'s Script>,
+        I::Item: Borrow<&'s ScriptPubkey>,
     {
         impl_inner_call!(self, batch_script_get_history, scripts.clone())
     }
 
     #[inline]
-    fn script_list_unspent(&self, script: &Script) -> Result<Vec<ListUnspentRes>, Error> {
+    fn script_list_unspent(&self, script: &ScriptPubkey) -> Result<Vec<ListUnspentRes>, Error> {
         impl_inner_call!(self, script_list_unspent, script)
     }
 
@@ -281,7 +280,7 @@ impl ElectrumApi for Client {
     ) -> Result<Vec<Vec<ListUnspentRes>>, Error>
     where
         I: IntoIterator + Clone,
-        I::Item: Borrow<&'s Script>,
+        I::Item: Borrow<&'s ScriptPubkey>,
     {
         impl_inner_call!(self, batch_script_list_unspent, scripts.clone())
     }

@@ -1,11 +1,11 @@
 [package]
-name = "electrum-client"
-version = "0.19.0"
-authors = ["Alekos Filini <alekos.filini@gmail.com>"]
+name = "bp-electrum"
+version = "0.11.0-beta.1"
+authors = ["Alekos Filini <alekos.filini@gmail.com>", "Dr Maxim Orlovsky <orlovsky@lnp-bp.org>"]
 license = "MIT"
-homepage = "https://github.com/MagicalBitcoin/rust-electrum-client"
-repository = "https://github.com/MagicalBitcoin/rust-electrum-client"
-documentation = "https://docs.rs/electrum-client/"
+homepage = "https://github.com/BP-WG/bp-electrum-client"
+repository = "https://github.com/BP-WG/bp-electrum-client"
+documentation = "https://docs.rs/bp-electrum-client/"
 description = "Bitcoin Electrum client library. Supports plaintext, TLS and Onion servers."
 keywords = ["bitcoin", "electrum"]
 readme = "README.md"
@@ -13,12 +13,14 @@ readme = "README.md"
 # loosely based on https://github.com/evgeniy-scherbina/rust-electrumx-client
 
 [lib]
-name = "electrum_client"
+name = "electrum"
 path = "src/lib.rs"
 
 [dependencies]
+amplify = "4.6.0"
+sha2 = "0.10.8"
 log = "^0.4"
-bitcoin = { version = "0.31.0", features = ["serde"] }
+bp-std = { version = "0.11.0-beta.4", features = ["serde"] }
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = { version = "^1.0" }
 
@@ -42,3 +44,6 @@ debug-calls = []
 proxy = ["byteorder", "winapi", "libc"]
 use-rustls = ["webpki-roots", "rustls"]
 use-openssl = ["openssl"]
+
+[patch.crates-io]
+bp-consensus = { git = "https://github.com/BP-WG/bp-core", branch = "block_header" }

@@ -2,6 +2,8 @@
 //!
 //! This module contains the definition of the raw client that wraps the transport method
 
+use amplify::hex::{FromHex, ToHex};
+use bpstd::{BlockHeader, ConsensusDecode, ScriptPubkey, Txid};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -14,10 +16,6 @@ use std::time::Duration;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-
-use bitcoin::consensus::encode::deserialize;
-use bitcoin::hex::{DisplayHex, FromHex};
-use bitcoin::{Script, Txid};
 
 #[cfg(feature = "use-openssl")]
 use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
@@ -803,7 +801,9 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
             let (start, end) = (i * 80, (i + 1) * 80);
             deserialized
                 .headers
-                .push(deserialize(&deserialized.raw_headers[start..end])?);
+                .push(BlockHeader::consensus_deserialize(
+                    &deserialized.raw_headers[start..end],
+                )?);
         }
         deserialized.raw_headers.clear();
 
@@ -836,7 +836,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
             .ok_or_else(|| Error::InvalidResponse(result.clone()))
     }
 
-    fn script_subscribe(&self, script: &Script) -> Result<Option<ScriptStatus>, Error> {
+    fn script_subscribe(&self, script: &ScriptPubkey) -> Result<Option<ScriptStatus>, Error> {
         let script_hash = script.to_electrum_scripthash();
         let mut script_notifications = self.script_notifications.lock()?;
 
@@ -860,7 +860,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     fn batch_script_subscribe<'s, I>(&self, scripts: I) -> Result<Vec<Option<ScriptStatus>>, Error>
     where
         I: IntoIterator + Clone,
-        I::Item: Borrow<&'s Script>,
+        I::Item: Borrow<&'s ScriptPubkey>,
     {
         {
             let mut script_notifications = self.script_notifications.lock()?;
@@ -876,7 +876,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         impl_batch_call!(self, scripts, script_subscribe)
     }
 
-    fn script_unsubscribe(&self, script: &Script) -> Result<bool, Error> {
+    fn script_unsubscribe(&self, script: &ScriptPubkey) -> Result<bool, Error> {
         let script_hash = script.to_electrum_scripthash();
         let mut script_notifications = self.script_notifications.lock()?;
 
@@ -897,7 +897,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         Ok(answer)
     }
 
-    fn script_pop(&self, script: &Script) -> Result<Option<ScriptStatus>, Error> {
+    fn script_pop(&self, script: &ScriptPubkey) -> Result<Option<ScriptStatus>, Error> {
         let script_hash = script.to_electrum_scripthash();
 
         match self.script_notifications.lock()?.get_mut(&script_hash) {
@@ -906,7 +906,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         }
     }
 
-    fn script_get_balance(&self, script: &Script) -> Result<GetBalanceRes, Error> {
+    fn script_get_balance(&self, script: &ScriptPubkey) -> Result<GetBalanceRes, Error> {
         let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
@@ -920,12 +920,12 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     fn batch_script_get_balance<'s, I>(&self, scripts: I) -> Result<Vec<GetBalanceRes>, Error>
     where
         I: IntoIterator + Clone,
-        I::Item: Borrow<&'s Script>,
+        I::Item: Borrow<&'s ScriptPubkey>,
     {
         impl_batch_call!(self, scripts, script_get_balance)
     }
 
-    fn script_get_history(&self, script: &Script) -> Result<Vec<GetHistoryRes>, Error> {
+    fn script_get_history(&self, script: &ScriptPubkey) -> Result<Vec<GetHistoryRes>, Error> {
         let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
@@ -939,12 +939,12 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     fn batch_script_get_history<'s, I>(&self, scripts: I) -> Result<Vec<Vec<GetHistoryRes>>, Error>
     where
         I: IntoIterator + Clone,
-        I::Item: Borrow<&'s Script>,
+        I::Item: Borrow<&'s ScriptPubkey>,
     {
         impl_batch_call!(self, scripts, script_get_history)
     }
 
-    fn script_list_unspent(&self, script: &Script) -> Result<Vec<ListUnspentRes>, Error> {
+    fn script_list_unspent(&self, script: &ScriptPubkey) -> Result<Vec<ListUnspentRes>, Error> {
         let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
@@ -968,7 +968,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     ) -> Result<Vec<Vec<ListUnspentRes>>, Error>
     where
         I: IntoIterator + Clone,
-        I::Item: Borrow<&'s Script>,
+        I::Item: Borrow<&'s ScriptPubkey>,
     {
         impl_batch_call!(self, scripts, script_list_unspent)
     }
@@ -1023,7 +1023,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     }
 
     fn transaction_broadcast_raw(&self, raw_tx: &[u8]) -> Result<Txid, Error> {
-        let params = vec![Param::String(raw_tx.to_lower_hex_string())];
+        let params = vec![Param::String(raw_tx.to_hex())];
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
             "blockchain.transaction.broadcast",
@@ -1076,12 +1076,12 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
 
 #[cfg(test)]
 mod test {
+    use bpstd::{Address, TxVer};
     use std::str::FromStr;
 
+    use super::*;
+    use crate::api::ElectrumApi;
     use crate::utils;
-
-    use super::RawClient;
-    use api::ElectrumApi;
 
     fn get_test_server() -> String {
         std::env::var("TEST_ELECTRUM_SERVER").unwrap_or("electrum.blockstream.info:50001".into())
@@ -1123,7 +1123,7 @@ mod test {
         let client = RawClient::new(get_test_server(), None).unwrap();
 
         let resp = client.block_header(0).unwrap();
-        assert_eq!(resp.version, bitcoin::block::Version::ONE);
+        assert_eq!(resp.version, 1);
         assert_eq!(resp.time, 1231006505);
         assert_eq!(resp.nonce, 0x7c2bac1d);
     }
@@ -1164,9 +1164,7 @@ mod test {
 
         // Realistically nobody will ever spend from this address, so we can expect the balance to
         // increase over time
-        let addr = bitcoin::Address::from_str("1CounterpartyXXXXXXXXXXXXXXXUWLpVr")
-            .unwrap()
-            .assume_checked();
+        let addr = Address::from_str("1CounterpartyXXXXXXXXXXXXXXXUWLpVr").unwrap();
         let resp = client.script_get_balance(&addr.script_pubkey()).unwrap();
         assert!(resp.confirmed >= 213091301265);
     }
@@ -1175,14 +1173,10 @@ mod test {
     fn test_script_get_history() {
         use std::str::FromStr;
 
-        use bitcoin::Txid;
-
         let client = RawClient::new(get_test_server(), None).unwrap();
 
         // Mt.Gox hack address
-        let addr = bitcoin::Address::from_str("1FeexV6bAHb8ybZjqQMjJrcCrHGW9sb6uF")
-            .unwrap()
-            .assume_checked();
+        let addr = Address::from_str("1FeexV6bAHb8ybZjqQMjJrcCrHGW9sb6uF").unwrap();
         let resp = client.script_get_history(&addr.script_pubkey()).unwrap();
 
         assert!(resp.len() >= 328);
@@ -1195,15 +1189,12 @@ mod test {
 
     #[test]
     fn test_script_list_unspent() {
-        use bitcoin::Txid;
         use std::str::FromStr;
 
         let client = RawClient::new(get_test_server(), None).unwrap();
 
         // Peter todd's sha256 bounty address https://bitcointalk.org/index.php?topic=293382.0
-        let addr = bitcoin::Address::from_str("35Snmmy3uhaer2gTboc81ayCip4m9DT4ko")
-            .unwrap()
-            .assume_checked();
+        let addr = Address::from_str("35Snmmy3uhaer2gTboc81ayCip4m9DT4ko").unwrap();
         let resp = client.script_list_unspent(&addr.script_pubkey()).unwrap();
 
         assert!(resp.len() >= 9);
@@ -1223,14 +1214,11 @@ mod test {
         let client = RawClient::new(get_test_server(), None).unwrap();
 
         // Peter todd's sha256 bounty address https://bitcointalk.org/index.php?topic=293382.0
-        let script_1 = bitcoin::Address::from_str("35Snmmy3uhaer2gTboc81ayCip4m9DT4ko")
+        let script_1 = Address::from_str("35Snmmy3uhaer2gTboc81ayCip4m9DT4ko")
             .unwrap()
-            .assume_checked()
             .script_pubkey();
 
-        let resp = client
-            .batch_script_list_unspent(vec![script_1.as_script()])
-            .unwrap();
+        let resp = client.batch_script_list_unspent(vec![&script_1]).unwrap();
         assert_eq!(resp.len(), 1);
         assert!(resp[0].len() >= 9);
     }
@@ -1247,8 +1235,6 @@ mod test {
 
     #[test]
     fn test_transaction_get() {
-        use bitcoin::{transaction, Txid};
-
         let client = RawClient::new(get_test_server(), None).unwrap();
 
         let resp = client
@@ -1257,14 +1243,12 @@ mod test {
                     .unwrap(),
             )
             .unwrap();
-        assert_eq!(resp.version, transaction::Version::ONE);
+        assert_eq!(resp.version, TxVer::V1);
         assert_eq!(resp.lock_time.to_consensus_u32(), 0);
     }
 
     #[test]
     fn test_transaction_get_raw() {
-        use bitcoin::Txid;
-
         let client = RawClient::new(get_test_server(), None).unwrap();
 
         let resp = client
@@ -1297,8 +1281,6 @@ mod test {
 
     #[test]
     fn test_transaction_get_merkle() {
-        use bitcoin::Txid;
-
         let client = RawClient::new(get_test_server(), None).unwrap();
 
         let txid =
@@ -1361,9 +1343,7 @@ mod test {
         let client = RawClient::new(get_test_server(), None).unwrap();
 
         // Mt.Gox hack address
-        let addr = bitcoin::Address::from_str("1FeexV6bAHb8ybZjqQMjJrcCrHGW9sb6uF")
-            .unwrap()
-            .assume_checked();
+        let addr = Address::from_str("1FeexV6bAHb8ybZjqQMjJrcCrHGW9sb6uF").unwrap();
 
         // Just make sure that the call returns Ok(something)
         client.script_subscribe(&addr.script_pubkey()).unwrap();

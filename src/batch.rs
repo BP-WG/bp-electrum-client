@@ -2,8 +2,8 @@
 //!
 //! This module contains definitions and helper functions used when making batch calls.
 
-use bitcoin::{Script, Txid};
 
+use bpstd::{ScriptPubkey, Txid};
 use types::{Call, Param, ToElectrumScriptHash};
 
 /// Helper structure that caches all the requests before they are actually sent to the server.
@@ -27,28 +27,28 @@ impl Batch {
     }
 
     /// Add one `blockchain.scripthash.listunspent` request to the batch queue
-    pub fn script_list_unspent(&mut self, script: &Script) {
+    pub fn script_list_unspent(&mut self, script: &ScriptPubkey) {
         let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
         self.calls
             .push((String::from("blockchain.scripthash.listunspent"), params));
     }
 
     /// Add one `blockchain.scripthash.get_history` request to the batch queue
-    pub fn script_get_history(&mut self, script: &Script) {
+    pub fn script_get_history(&mut self, script: &ScriptPubkey) {
         let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
         self.calls
             .push((String::from("blockchain.scripthash.get_history"), params));
     }
 
     /// Add one `blockchain.scripthash.get_balance` request to the batch queue
-    pub fn script_get_balance(&mut self, script: &Script) {
+    pub fn script_get_balance(&mut self, script: &ScriptPubkey) {
         let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
         self.calls
             .push((String::from("blockchain.scripthash.get_balance"), params));
     }
 
     /// Add one `blockchain.scripthash.listunspent` request to the batch queue
-    pub fn script_subscribe(&mut self, script: &Script) {
+    pub fn script_subscribe(&mut self, script: &ScriptPubkey) {
         let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
         self.calls
             .push((String::from("blockchain.scripthash.subscribe"), params));
@@ -84,7 +84,7 @@ impl Batch {
     }
 }
 
-impl std::iter::IntoIterator for Batch {
+impl IntoIterator for Batch {
     type Item = (String, Vec<Param>);
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
@@ -98,7 +98,7 @@ pub struct BatchIter<'a> {
     index: usize,
 }
 
-impl<'a> std::iter::Iterator for BatchIter<'a> {
+impl<'a> Iterator for BatchIter<'a> {
     type Item = &'a (String, Vec<Param>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -108,7 +108,7 @@ impl<'a> std::iter::Iterator for BatchIter<'a> {
     }
 }
 
-impl std::default::Default for Batch {
+impl Default for Batch {
     fn default() -> Self {
         Batch { calls: Vec::new() }
     }

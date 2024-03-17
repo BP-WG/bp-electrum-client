@@ -12,14 +12,13 @@
 //! # Example
 //!
 //! ```no_run
-//! use electrum_client::{Client, ElectrumApi};
+//! use electrum::{Client, ElectrumApi};
 //!
 //! let mut client = Client::new("tcp://electrum.blockstream.info:50001")?;
 //! let response = client.server_features()?;
-//! # Ok::<(), electrum_client::Error>(())
+//! # Ok::<(), electrum::Error>(())
 //! ```
 
-pub extern crate bitcoin;
 extern crate core;
 extern crate log;
 #[cfg(feature = "use-openssl")]
@@ -38,8 +37,11 @@ extern crate webpki_roots;
 #[cfg(any(feature = "default", feature = "proxy"))]
 extern crate byteorder;
 
+extern crate amplify;
+extern crate bpstd;
 #[cfg(all(unix, any(feature = "default", feature = "proxy")))]
 extern crate libc;
+extern crate sha2;
 #[cfg(all(windows, any(feature = "default", feature = "proxy")))]
 extern crate winapi;
 
@@ -60,6 +62,7 @@ mod config;
 pub mod raw_client;
 mod stream;
 mod types;
+#[cfg(test)]
 pub mod utils;
 
 pub use api::ElectrumApi;

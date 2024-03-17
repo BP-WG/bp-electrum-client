@@ -1,6 +1,6 @@
-extern crate electrum_client;
+extern crate electrum;
 
-use electrum_client::{Client, ConfigBuilder, ElectrumApi, Socks5Config};
+use electrum::{Client, ConfigBuilder, ElectrumApi, Socks5Config};
 
 fn main() {
     // NOTE: This assumes Tor is running localy, with an unauthenticated Socks5 listening at

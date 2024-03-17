@@ -1,6 +1,6 @@
-extern crate electrum_client;
+extern crate electrum;
 
-use electrum_client::{Client, ElectrumApi};
+use electrum::{Client, ElectrumApi};
 
 fn main() {
     let client = Client::new("tcp://electrum.blockstream.info:50001").unwrap();
