@@ -141,7 +141,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             socks5: None,
-            timeout: None,
+            timeout: Some(Duration::from_secs(30)),
             retry: 1,
             validate_domain: true,
         }
