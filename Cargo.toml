@@ -9,6 +9,7 @@ documentation = "https://docs.rs/bp-electrum-client/"
 description = "Bitcoin Electrum client library. Supports plaintext, TLS and Onion servers."
 keywords = ["bitcoin", "electrum"]
 readme = "README.md"
+rust-version = "1.63.0"
 
 # loosely based on https://github.com/evgeniy-scherbina/rust-electrumx-client
 
@@ -26,7 +27,7 @@ serde_json = { version = "^1.0" }
 
 # Optional dependencies
 openssl = { version = "0.10", optional = true }
-rustls = { version = "0.21", optional = true, features = ["dangerous_configuration"] }
+rustls = { version = "0.23", optional = true }
 webpki-roots = { version = "0.25", optional = true }
 
 byteorder = { version = "1.0", optional = true }
