@@ -1,6 +1,6 @@
 [package]
 name = "bp-electrum"
-version = "0.11.0-beta.7"
+version = "0.11.0-beta.7.1"
 authors = ["Alekos Filini <alekos.filini@gmail.com>", "Dr Maxim Orlovsky <orlovsky@lnp-bp.org>"]
 license = "MIT"
 homepage = "https://github.com/BP-WG/bp-electrum-client"
@@ -10,7 +10,7 @@ description = "Bitcoin Electrum client library. Supports plaintext, TLS and Onio
 keywords = ["bitcoin", "electrum"]
 readme = "README.md"
 # TODO: Set edition to 2021
-rust-version = "1.63.0"
+rust-version = "1.75.0"
 
 [lib]
 name = "electrum"

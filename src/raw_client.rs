@@ -26,7 +26,6 @@ use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
 ))]
 use rustls::{
     pki_types::ServerName,
-    pki_types::{Der, TrustAnchor},
     ClientConfig, ClientConnection, RootCertStore, StreamOwned,
 };
 
@@ -389,11 +388,7 @@ impl RawClient<ElectrumSslStream> {
 
             let store = webpki_roots::TLS_SERVER_ROOTS
                 .into_iter()
-                .map(|t| TrustAnchor {
-                    subject: Der::from_slice(t.subject),
-                    subject_public_key_info: Der::from_slice(t.spki),
-                    name_constraints: t.name_constraints.map(|nc| Der::from_slice(nc)),
-                })
+                .cloned()
                 .collect::<RootCertStore>();
 
             // TODO: cert pinning
