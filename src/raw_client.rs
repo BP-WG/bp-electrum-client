@@ -381,6 +381,8 @@ impl RawClient<ElectrumSslStream> {
     ) -> Result<Self, Error> {
         use std::convert::TryFrom;
 
+        #[cfg(feature = "use-rustls")]
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let builder = ClientConfig::builder();
 
         let config = if validate_domain {
