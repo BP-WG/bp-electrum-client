@@ -1,6 +1,6 @@
 [package]
 name = "bp-electrum"
-version = "0.11.0-beta.9"
+version = "0.11.0-beta.9.1"
 authors = ["Alekos Filini <alekos.filini@gmail.com>", "Dr Maxim Orlovsky <orlovsky@lnp-bp.org>"]
 license = "MIT"
 homepage = "https://github.com/BP-WG/bp-electrum-client"

@@ -1383,7 +1383,7 @@ mod test {
 
     #[test]
     fn test_raw_call() {
-        use types::Param;
+        use crate::types::Param;
 
         let client = RawClient::new(get_test_server(), None).unwrap();
 
