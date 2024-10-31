@@ -287,7 +287,7 @@ impl RawClient<ElectrumSslStream> {
     not(feature = "use-openssl")
 ))]
 mod danger {
-    use raw_client::ServerName;
+    use crate::raw_client::ServerName;
     use rustls::client::danger::ServerCertVerified;
     use rustls::pki_types::CertificateDer;
     use rustls::pki_types::UnixTime;
