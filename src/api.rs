@@ -4,8 +4,8 @@ use std::borrow::Borrow;
 use std::convert::TryInto;
 use bpstd::{BlockHeader, ConsensusDecode, ConsensusEncode, ScriptPubkey, Tx, Txid};
 
-use batch::Batch;
-use types::*;
+use crate::batch::Batch;
+use crate::types::*;
 
 /// API calls exposed by an Electrum client
 pub trait ElectrumApi {

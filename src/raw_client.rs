@@ -32,11 +32,11 @@ use rustls::{
 #[cfg(any(feature = "default", feature = "proxy"))]
 use crate::socks::{Socks5Stream, TargetAddr, ToTargetAddr};
 
-use stream::ClonableStream;
+use crate::stream::ClonableStream;
 
-use api::ElectrumApi;
-use batch::Batch;
-use types::*;
+use crate::api::ElectrumApi;
+use crate::batch::Batch;
+use crate::types::*;
 
 macro_rules! impl_batch_call {
     ( $self:expr, $data:expr, $call:ident ) => {{

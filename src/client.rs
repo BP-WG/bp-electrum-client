@@ -4,13 +4,13 @@ use std::{borrow::Borrow, sync::RwLock};
 
 use log::{info, warn};
 
-use api::ElectrumApi;
-use batch::Batch;
-use config::Config;
-use raw_client::*;
+use crate::api::ElectrumApi;
+use crate::batch::Batch;
+use crate::config::Config;
+use crate::raw_client::*;
 use std::convert::TryFrom;
 use bpstd::{ScriptPubkey, Txid};
-use types::*;
+use crate::types::*;
 
 /// Generalized Electrum client that supports multiple backends. This wraps
 /// [`RawClient`](client/struct.RawClient.html) and provides a more user-friendly
