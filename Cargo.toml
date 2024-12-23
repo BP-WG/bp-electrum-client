@@ -1,6 +1,6 @@
 [package]
 name = "bp-electrum"
-version = "0.12.0-beta.1"
+version = "0.12.0-beta.4"
 authors = ["Alekos Filini <alekos.filini@gmail.com>", "Dr Maxim Orlovsky <orlovsky@lnp-bp.org>"]
 license = "MIT"
 homepage = "https://github.com/BP-WG/bp-electrum-client"
@@ -21,7 +21,7 @@ path = "src/lib.rs"
 amplify = "4.8.0"
 sha2 = "0.10.8"
 log = "^0.4"
-bp-std = { version = "0.12.0-beta.2", features = ["serde"] }
+bp-std = { version = "0.12.0-beta.4", features = ["serde"] }
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = { version = "^1.0" }
 
@@ -45,7 +45,3 @@ debug-calls = []
 proxy = ["byteorder", "winapi", "libc"]
 use-rustls = ["webpki-roots", "rustls"]
 use-openssl = ["openssl"]
-
-[patch.crates-io]
-bp-consensus = { git = "https://github.com/BP-WG/bp-core", branch = "v0.12" }
-bp-std = { git = "https://github.com/BP-WG/bp-std", branch = "v0.12" }
