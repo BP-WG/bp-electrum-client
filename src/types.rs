@@ -2,13 +2,13 @@
 //!
 //! This module contains definitions of all the complex data structures that are returned by calls
 
+use amplify::hex;
+use amplify::hex::{FromHex, ToHex};
+use bpstd::{BlockHeader, ConsensusDecode, ConsensusDecodeError, ScriptPubkey, Txid};
 use std::convert::TryFrom;
 use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
-use amplify::hex;
-use amplify::hex::{FromHex, ToHex};
-use bpstd::{BlockHeader, ConsensusDecode, ConsensusDecodeError, ScriptPubkey, Txid};
 
 use serde::{de, Deserialize, Serialize};
 use sha2::Digest;

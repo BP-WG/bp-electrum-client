@@ -24,10 +24,7 @@ use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
     any(feature = "default", feature = "use-rustls"),
     not(feature = "use-openssl")
 ))]
-use rustls::{
-    pki_types::ServerName,
-    ClientConfig, ClientConnection, RootCertStore, StreamOwned,
-};
+use rustls::{pki_types::ServerName, ClientConfig, ClientConnection, RootCertStore, StreamOwned};
 
 #[cfg(any(feature = "default", feature = "proxy"))]
 use crate::socks::{Socks5Stream, TargetAddr, ToTargetAddr};

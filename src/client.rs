@@ -8,9 +8,9 @@ use crate::api::ElectrumApi;
 use crate::batch::Batch;
 use crate::config::Config;
 use crate::raw_client::*;
-use std::convert::TryFrom;
-use bpstd::{ScriptPubkey, Txid};
 use crate::types::*;
+use bpstd::{ScriptPubkey, Txid};
+use std::convert::TryFrom;
 
 /// Generalized Electrum client that supports multiple backends. This wraps
 /// [`RawClient`](client/struct.RawClient.html) and provides a more user-friendly

@@ -1,8 +1,8 @@
 //! Electrum APIs
 
+use bpstd::{BlockHeader, ConsensusDecode, ConsensusEncode, ScriptPubkey, Tx, Txid};
 use std::borrow::Borrow;
 use std::convert::TryInto;
-use bpstd::{BlockHeader, ConsensusDecode, ConsensusEncode, ScriptPubkey, Tx, Txid};
 
 use crate::batch::Batch;
 use crate::types::*;
@@ -11,7 +11,9 @@ use crate::types::*;
 pub trait ElectrumApi {
     /// Gets the block header for height `height`.
     fn block_header(&self, height: usize) -> Result<BlockHeader, Error> {
-        Ok(BlockHeader::consensus_deserialize(&self.block_header_raw(height)?)?)
+        Ok(BlockHeader::consensus_deserialize(
+            &self.block_header_raw(height)?,
+        )?)
     }
 
     /// Subscribes to notifications for new block headers, by sending a `blockchain.headers.subscribe` call.

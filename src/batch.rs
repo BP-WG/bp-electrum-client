@@ -2,9 +2,8 @@
 //!
 //! This module contains definitions and helper functions used when making batch calls.
 
-
-use bpstd::{ScriptPubkey, Txid};
 use crate::types::{Call, Param, ToElectrumScriptHash};
+use bpstd::{ScriptPubkey, Txid};
 
 /// Helper structure that caches all the requests before they are actually sent to the server.
 ///
