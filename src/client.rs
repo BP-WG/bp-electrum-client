@@ -352,7 +352,7 @@ mod tests {
     fn more_failed_attempts_than_retries_means_exhausted() {
         let exhausted = retries_exhausted(10, 5);
 
-        assert_eq!(exhausted, true)
+        assert!(exhausted)
     }
 
     #[test]
@@ -361,21 +361,21 @@ mod tests {
 
         let exhausted = retries_exhausted(failed_attempts, u8::MAX);
 
-        assert_eq!(exhausted, true)
+        assert!(exhausted)
     }
 
     #[test]
     fn less_failed_attempts_means_not_exhausted() {
         let exhausted = retries_exhausted(2, 5);
 
-        assert_eq!(exhausted, false)
+        assert!(!exhausted)
     }
 
     #[test]
     fn attempts_equals_retries_means_not_exhausted_yet() {
         let exhausted = retries_exhausted(2, 2);
 
-        assert_eq!(exhausted, false)
+        assert!(!exhausted)
     }
 
     #[test]
@@ -407,7 +407,7 @@ mod tests {
             sender.send(()).unwrap();
 
             for _stream in listener.incoming() {
-                loop {}
+                std::thread::sleep(std::time::Duration::from_secs(60));
             }
         });
 
