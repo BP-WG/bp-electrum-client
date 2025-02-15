@@ -109,7 +109,7 @@ impl_to_socket_addrs_domain!((std::net::Ipv6Addr, u16));
 /// Instance of an Electrum client
 ///
 /// A `Client` maintains a constant connection with an Electrum server and exposes methods to
-/// interact with it. It can also subscribe and receive notifictations from the server about new
+/// interact with it. It can also subscribe and receive notifications from the server about new
 /// blocks or activity on a specific *scriptPubKey*.
 ///
 /// The `Client` is modeled in such a way that allows the external caller to have full control over
@@ -117,7 +117,7 @@ impl_to_socket_addrs_domain!((std::net::Ipv6Addr, u16));
 /// connection.
 ///
 /// More transport methods can be used by manually creating an instance of this struct with an
-/// arbitray `S` type.
+/// arbitrary `S` type.
 #[derive(Debug)]
 pub struct RawClient<S>
 where
@@ -635,7 +635,7 @@ impl<S: Read + Write> RawClient<S> {
     ) -> Result<serde_json::Value, Error> {
         loop {
             // Try to take the lock on the reader. If we manage to do so, we'll become the reader
-            // thread until we get our reponse
+            // thread until we get our response
             match self._reader_thread(Some(req_id)) {
                 Ok(response) => break Ok(response),
                 Err(Error::CouldntLockReader) => {
