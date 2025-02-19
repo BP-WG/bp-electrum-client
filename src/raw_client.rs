@@ -24,10 +24,7 @@ use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
     any(feature = "default", feature = "use-rustls"),
     not(feature = "use-openssl")
 ))]
-use rustls::{
-    pki_types::ServerName,
-    ClientConfig, ClientConnection, RootCertStore, StreamOwned,
-};
+use rustls::{pki_types::ServerName, ClientConfig, ClientConnection, RootCertStore, StreamOwned};
 
 #[cfg(any(feature = "default", feature = "proxy"))]
 use crate::socks::{Socks5Stream, TargetAddr, ToTargetAddr};
@@ -76,7 +73,7 @@ pub trait ToSocketAddrsDomain: ToSocketAddrs {
 
 impl ToSocketAddrsDomain for &str {
     fn domain(&self) -> Option<&str> {
-        self.splitn(2, ':').next()
+        self.split(':').next()
     }
 }
 
@@ -112,7 +109,7 @@ impl_to_socket_addrs_domain!((std::net::Ipv6Addr, u16));
 /// Instance of an Electrum client
 ///
 /// A `Client` maintains a constant connection with an Electrum server and exposes methods to
-/// interact with it. It can also subscribe and receive notifictations from the server about new
+/// interact with it. It can also subscribe and receive notifications from the server about new
 /// blocks or activity on a specific *scriptPubKey*.
 ///
 /// The `Client` is modeled in such a way that allows the external caller to have full control over
@@ -120,7 +117,7 @@ impl_to_socket_addrs_domain!((std::net::Ipv6Addr, u16));
 /// connection.
 ///
 /// More transport methods can be used by manually creating an instance of this struct with an
-/// arbitray `S` type.
+/// arbitrary `S` type.
 #[derive(Debug)]
 pub struct RawClient<S>
 where
@@ -551,9 +548,8 @@ impl<S: Read + Write> RawClient<S> {
                             if let Some(err) = map.values().find_map(|sender| {
                                 sender
                                     .send(ChannelMessage::WakeUp)
-                                    .map_err(|err| {
+                                    .inspect_err(|_| {
                                         warn!("Unable to wake up a thread, trying some other");
-                                        err
                                     })
                                     .err()
                             }) {
@@ -578,7 +574,7 @@ impl<S: Read + Write> RawClient<S> {
                             // No id, that's probably a notification.
                             let mut resp = resp;
 
-                            if let Some(ref method) = resp["method"].take().as_str() {
+                            if let Some(method) = resp["method"].take().as_str() {
                                 self.handle_notification(method, resp["params"].take())?;
                             } else {
                                 warn!("Unexpected response: {:?}", resp);
@@ -639,7 +635,7 @@ impl<S: Read + Write> RawClient<S> {
     ) -> Result<serde_json::Value, Error> {
         loop {
             // Try to take the lock on the reader. If we manage to do so, we'll become the reader
-            // thread until we get our reponse
+            // thread until we get our response
             match self._reader_thread(Some(req_id)) {
                 Ok(response) => break Ok(response),
                 Err(Error::CouldntLockReader) => {
@@ -695,7 +691,7 @@ impl<S: Read + Write> RawClient<S> {
     ) -> Result<serde_json::Value, Error> {
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
-            &method_name,
+            method_name,
             params,
         );
         let result = self.call(req)?;
@@ -736,7 +732,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         for (method, params) in batch.iter() {
             let req = Request::new_id(
                 self.last_id.fetch_add(1, Ordering::SeqCst),
-                &method,
+                method,
                 params.to_vec(),
             );
             missing_responses.insert(req.id);
@@ -777,7 +773,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
             };
         }
 
-        Ok(answers.into_iter().map(|(_, r)| r).collect())
+        Ok(answers.into_values().collect())
     }
 
     fn block_headers_subscribe_raw(&self) -> Result<RawHeaderNotification, Error> {
@@ -872,7 +868,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
             "blockchain.scripthash.subscribe",
-            vec![Param::String(script_hash.to_hex())],
+            vec![Param::String(script_hash.as_hex())],
         );
         let value = self.call(req)?;
 
@@ -909,7 +905,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
             "blockchain.scripthash.unsubscribe",
-            vec![Param::String(script_hash.to_hex())],
+            vec![Param::String(script_hash.as_hex())],
         );
         let value = self.call(req)?;
         let answer = serde_json::from_value(value)?;
@@ -929,7 +925,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     }
 
     fn script_get_balance(&self, script: &ScriptPubkey) -> Result<GetBalanceRes, Error> {
-        let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
+        let params = vec![Param::String(script.to_electrum_scripthash().as_hex())];
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
             "blockchain.scripthash.get_balance",
@@ -948,7 +944,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     }
 
     fn script_get_history(&self, script: &ScriptPubkey) -> Result<Vec<GetHistoryRes>, Error> {
-        let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
+        let params = vec![Param::String(script.to_electrum_scripthash().as_hex())];
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
             "blockchain.scripthash.get_history",
@@ -967,7 +963,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     }
 
     fn script_list_unspent(&self, script: &ScriptPubkey) -> Result<Vec<ListUnspentRes>, Error> {
-        let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
+        let params = vec![Param::String(script.to_electrum_scripthash().as_hex())];
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
             "blockchain.scripthash.listunspent",

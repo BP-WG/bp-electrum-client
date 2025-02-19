@@ -8,9 +8,9 @@ use crate::api::ElectrumApi;
 use crate::batch::Batch;
 use crate::config::Config;
 use crate::raw_client::*;
-use std::convert::TryFrom;
-use bpstd::{ScriptPubkey, Txid};
 use crate::types::*;
+use bpstd::{ScriptPubkey, Txid};
+use std::convert::TryFrom;
 
 /// Generalized Electrum client that supports multiple backends. This wraps
 /// [`RawClient`](client/struct.RawClient.html) and provides a more user-friendly
@@ -71,7 +71,7 @@ macro_rules! impl_inner_call {
                             std::thread::sleep(std::time::Duration::from_secs((1 << errors.len()).min(30) as u64));
                             match ClientType::from_config(&$self.url, &$self.config) {
                                 Ok(new_client) => {
-                                    info!("Succesfully created new client");
+                                    info!("Successfully created new client");
                                     *write_client = new_client;
                                     break;
                                 },
@@ -352,7 +352,7 @@ mod tests {
     fn more_failed_attempts_than_retries_means_exhausted() {
         let exhausted = retries_exhausted(10, 5);
 
-        assert_eq!(exhausted, true)
+        assert!(exhausted)
     }
 
     #[test]
@@ -361,21 +361,21 @@ mod tests {
 
         let exhausted = retries_exhausted(failed_attempts, u8::MAX);
 
-        assert_eq!(exhausted, true)
+        assert!(exhausted)
     }
 
     #[test]
     fn less_failed_attempts_means_not_exhausted() {
         let exhausted = retries_exhausted(2, 5);
 
-        assert_eq!(exhausted, false)
+        assert!(!exhausted)
     }
 
     #[test]
     fn attempts_equals_retries_means_not_exhausted_yet() {
         let exhausted = retries_exhausted(2, 2);
 
-        assert_eq!(exhausted, false)
+        assert!(!exhausted)
     }
 
     #[test]
@@ -407,7 +407,7 @@ mod tests {
             sender.send(()).unwrap();
 
             for _stream in listener.incoming() {
-                loop {}
+                std::thread::sleep(std::time::Duration::from_secs(60));
             }
         });
 
