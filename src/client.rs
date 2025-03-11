@@ -9,7 +9,7 @@ use crate::batch::Batch;
 use crate::config::Config;
 use crate::raw_client::*;
 use crate::types::*;
-use bpstd::{ScriptPubkey, Txid};
+use bp::{ScriptPubkey, Txid};
 use std::convert::TryFrom;
 
 /// Generalized Electrum client that supports multiple backends. This wraps
