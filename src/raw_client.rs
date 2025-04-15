@@ -992,6 +992,17 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         impl_batch_call!(self, scripts, script_list_unspent)
     }
 
+    fn script_get_mempool(&self, script: &ScriptPubkey) -> Result<Vec<GetMempoolRes>, Error> {
+        let params = vec![Param::String(script.to_electrum_scripthash().as_hex())];
+        let req = Request::new_id(
+            self.last_id.fetch_add(1, Ordering::SeqCst),
+            "blockchain.scripthash.listunspent",
+            params,
+        );
+        let result = self.call(req)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
     fn transaction_get_raw(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
         let params = vec![Param::String(format!("{:x}", txid))];
         let req = Request::new_id(

@@ -182,6 +182,17 @@ pub struct ListUnspentRes {
     pub value: u64,
 }
 
+/// Response to a [`script_list_unspent`](../client/struct.Client.html#method.script_get_mempool) request.
+#[derive(Clone, Debug, Deserialize)]
+pub struct GetMempoolRes {
+    /// 0 if all inputs are confirmed, and -1 otherwise.
+    pub height: i32,
+    /// The transaction hash in hexadecimal.
+    pub tx_hash: Txid,
+    /// The transaction fee in minimum coin units (satoshis).
+    pub fee: u64,
+}
+
 /// Response to a [`server_features`](../client/struct.Client.html#method.server_features) request.
 #[derive(Clone, Debug, Deserialize)]
 pub struct ServerFeaturesRes {

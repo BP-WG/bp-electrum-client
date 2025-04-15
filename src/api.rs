@@ -166,7 +166,12 @@ pub trait ElectrumApi {
         I: IntoIterator + Clone,
         I::Item: Borrow<&'s ScriptPubkey>;
 
-    /// Gets the raw bytes of a transaction with `txid`. Returns an error if not found.
+    /// Return the unconfirmed transactions of a script hash.
+    /// 
+    /// Added in version 1.1.
+    fn script_get_mempool(&self, script: &ScriptPubkey) -> Result<Vec<GetMempoolRes>, Error>;
+
+        /// Gets the raw bytes of a transaction with `txid`. Returns an error if not found.
     fn transaction_get_raw(&self, txid: &Txid) -> Result<Vec<u8>, Error>;
 
     /// Batch version of [`transaction_get_raw`](#method.transaction_get_raw).

@@ -284,6 +284,10 @@ impl ElectrumApi for Client {
     {
         impl_inner_call!(self, batch_script_list_unspent, scripts.clone())
     }
+    
+    fn script_get_mempool(&self, script: &ScriptPubkey) -> Result<Vec<GetMempoolRes>, Error> {
+        impl_inner_call!(self, script_get_mempool, script)
+    }
 
     #[inline]
     fn transaction_get_raw(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
