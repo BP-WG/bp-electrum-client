@@ -262,6 +262,17 @@ pub struct GetMerkleRes {
     pub merkle: Vec<[u8; 32]>,
 }
 
+/// Response to a [`txid_from_pos_with_merkle`](../client/struct.Client.html#method.txid_from_pos_with_merkle)
+/// request.
+#[derive(Clone, Debug, Deserialize)]
+pub struct TxidFromPosRes {
+    /// Txid of the transaction.
+    pub tx_hash: Txid,
+    /// The merkle path of the transaction.
+    #[serde(deserialize_with = "from_hex_array")]
+    pub merkle: Vec<[u8; 32]>,
+}
+
 /// Notification of a new block header
 #[derive(Clone, Debug, Deserialize)]
 pub struct HeaderNotification {
@@ -346,8 +357,7 @@ pub enum Error {
     CouldntLockReader,
     /// Broken IPC communication channel: the other thread probably has exited
     Mpsc,
-
-    #[cfg(feature = "use-rustls")]
+    #[cfg(any(feature = "use-rustls", feature = "use-rustls-ring"))]
     /// Could not create a rustls client connection
     CouldNotCreateConnection(rustls::Error),
 
@@ -371,7 +381,10 @@ impl Display for Error {
             Error::SslHandshakeError(e) => Display::fmt(e, f),
             #[cfg(feature = "use-openssl")]
             Error::InvalidSslMethod(e) => Display::fmt(e, f),
-            #[cfg(feature = "use-rustls")]
+            #[cfg(any(
+                feature = "use-rustls",
+                feature = "use-rustls-ring",
+            ))]
             Error::CouldNotCreateConnection(e) => Display::fmt(e, f),
 
             Error::InvalidDNSNameError(domain) => write!(f, "Invalid domain name {} not matching SSL certificate", domain),

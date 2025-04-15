@@ -3,9 +3,179 @@
 use bp::{BlockHeader, ConsensusDecode, ConsensusEncode, ScriptPubkey, Tx, Txid};
 use std::borrow::Borrow;
 use std::convert::TryInto;
+use std::ops::Deref;
 
 use crate::batch::Batch;
 use crate::types::*;
+
+impl<E: Deref> ElectrumApi for E
+where
+    E::Target: ElectrumApi,
+{
+    fn raw_call(
+        &self,
+        method_name: &str,
+        params: impl IntoIterator<Item = Param>,
+    ) -> Result<serde_json::Value, Error> {
+        (**self).raw_call(method_name, params)
+    }
+
+    fn batch_call(&self, batch: &Batch) -> Result<Vec<serde_json::Value>, Error> {
+        (**self).batch_call(batch)
+    }
+
+    fn block_headers_subscribe_raw(&self) -> Result<RawHeaderNotification, Error> {
+        (**self).block_headers_subscribe_raw()
+    }
+
+    fn block_headers_pop_raw(&self) -> Result<Option<RawHeaderNotification>, Error> {
+        (**self).block_headers_pop_raw()
+    }
+
+    fn block_header_raw(&self, height: usize) -> Result<Vec<u8>, Error> {
+        (**self).block_header_raw(height)
+    }
+
+    fn block_headers(&self, start_height: usize, count: usize) -> Result<GetHeadersRes, Error> {
+        (**self).block_headers(start_height, count)
+    }
+
+    fn estimate_fee(&self, number: usize) -> Result<f64, Error> {
+        (**self).estimate_fee(number)
+    }
+
+    fn relay_fee(&self) -> Result<f64, Error> {
+        (**self).relay_fee()
+    }
+
+    fn script_subscribe(&self, script: &ScriptPubkey) -> Result<Option<ScriptStatus>, Error> {
+        (**self).script_subscribe(script)
+    }
+
+    fn batch_script_subscribe<'s, I>(&self, scripts: I) -> Result<Vec<Option<ScriptStatus>>, Error>
+    where
+        I: IntoIterator + Clone,
+        I::Item: Borrow<&'s ScriptPubkey>,
+    {
+        (**self).batch_script_subscribe(scripts)
+    }
+
+    fn script_unsubscribe(&self, script: &ScriptPubkey) -> Result<bool, Error> {
+        (**self).script_unsubscribe(script)
+    }
+
+    fn script_pop(&self, script: &ScriptPubkey) -> Result<Option<ScriptStatus>, Error> {
+        (**self).script_pop(script)
+    }
+
+    fn script_get_balance(&self, script: &ScriptPubkey) -> Result<GetBalanceRes, Error> {
+        (**self).script_get_balance(script)
+    }
+
+    fn batch_script_get_balance<'s, I>(&self, scripts: I) -> Result<Vec<GetBalanceRes>, Error>
+    where
+        I: IntoIterator + Clone,
+        I::Item: Borrow<&'s ScriptPubkey>,
+    {
+        (**self).batch_script_get_balance(scripts)
+    }
+
+    fn script_get_history(&self, script: &ScriptPubkey) -> Result<Vec<GetHistoryRes>, Error> {
+        (**self).script_get_history(script)
+    }
+
+    fn batch_script_get_history<'s, I>(&self, scripts: I) -> Result<Vec<Vec<GetHistoryRes>>, Error>
+    where
+        I: IntoIterator + Clone,
+        I::Item: Borrow<&'s ScriptPubkey>,
+    {
+        (**self).batch_script_get_history(scripts)
+    }
+
+    fn script_list_unspent(&self, script: &ScriptPubkey) -> Result<Vec<ListUnspentRes>, Error> {
+        (**self).script_list_unspent(script)
+    }
+
+    fn batch_script_list_unspent<'s, I>(
+        &self,
+        scripts: I,
+    ) -> Result<Vec<Vec<ListUnspentRes>>, Error>
+    where
+        I: IntoIterator + Clone,
+        I::Item: Borrow<&'s ScriptPubkey>,
+    {
+        (**self).batch_script_list_unspent(scripts)
+    }
+
+    fn script_get_mempool(&self, script: &ScriptPubkey) -> Result<Vec<GetMempoolRes>, Error> {
+        (**self).script_get_mempool(script)
+    }
+
+    fn transaction_get_verbose(&self, txid: &Txid) -> Result<Option<TxRes>, Error> {
+        (**self).transaction_get_verbose(txid)
+    }
+
+    fn transaction_get_raw(&self, txid: &Txid) -> Result<Option<Vec<u8>>, Error> {
+        (**self).transaction_get_raw(txid)
+    }
+
+    fn batch_transaction_get_raw<'t, I>(&self, txids: I) -> Result<Vec<Vec<u8>>, Error>
+    where
+        I: IntoIterator + Clone,
+        I::Item: Borrow<&'t Txid>,
+    {
+        (**self).batch_transaction_get_raw(txids)
+    }
+
+    fn batch_block_header_raw<I>(&self, heights: I) -> Result<Vec<Vec<u8>>, Error>
+    where
+        I: IntoIterator + Clone,
+        I::Item: Borrow<u32>,
+    {
+        (**self).batch_block_header_raw(heights)
+    }
+
+    fn batch_estimate_fee<I>(&self, numbers: I) -> Result<Vec<f64>, Error>
+    where
+        I: IntoIterator + Clone,
+        I::Item: Borrow<usize>,
+    {
+        (**self).batch_estimate_fee(numbers)
+    }
+
+    fn transaction_broadcast_raw(&self, raw_tx: &[u8]) -> Result<Txid, Error> {
+        (**self).transaction_broadcast_raw(raw_tx)
+    }
+
+    fn transaction_get_merkle(&self, txid: &Txid, height: usize) -> Result<GetMerkleRes, Error> {
+        (**self).transaction_get_merkle(txid, height)
+    }
+
+    fn txid_from_pos(&self, height: usize, tx_pos: usize) -> Result<Txid, Error> {
+        (**self).txid_from_pos(height, tx_pos)
+    }
+
+    fn txid_from_pos_with_merkle(
+        &self,
+        height: usize,
+        tx_pos: usize,
+    ) -> Result<TxidFromPosRes, Error> {
+        (**self).txid_from_pos_with_merkle(height, tx_pos)
+    }
+
+    fn server_features(&self) -> Result<ServerFeaturesRes, Error> {
+        (**self).server_features()
+    }
+
+    fn ping(&self) -> Result<(), Error> {
+        (**self).ping()
+    }
+
+    #[cfg(feature = "debug-calls")]
+    fn calls_made(&self) -> Result<usize, Error> {
+        (**self).calls_made()
+    }
+}
 
 /// API calls exposed by an Electrum client
 pub trait ElectrumApi {
@@ -31,7 +201,10 @@ pub trait ElectrumApi {
 
     /// Gets the transaction with `txid`. Returns an error if not found.
     fn transaction_get(&self, txid: &Txid) -> Result<Option<Tx>, Error> {
-        Ok(self.transaction_get_raw(txid)?.map(Tx::consensus_deserialize).transpose()?)
+        Ok(self
+            .transaction_get_raw(txid)?
+            .map(Tx::consensus_deserialize)
+            .transpose()?)
     }
 
     /// Gets the transaction with `txid`, including additional verbose details returned by Butcoin Core. Returns an error if not found.
@@ -208,6 +381,17 @@ pub trait ElectrumApi {
     /// Returns the merkle path for the transaction `txid` confirmed in the block at `height`.
     fn transaction_get_merkle(&self, txid: &Txid, height: usize) -> Result<GetMerkleRes, Error>;
 
+    /// Returns a transaction hash, given a block `height` and a `tx_pos` in the block.
+    fn txid_from_pos(&self, height: usize, tx_pos: usize) -> Result<Txid, Error>;
+
+    /// Returns a transaction hash and a merkle path, given a block `height` and a `tx_pos` in the
+    /// block.
+    fn txid_from_pos_with_merkle(
+        &self,
+        height: usize,
+        tx_pos: usize,
+    ) -> Result<TxidFromPosRes, Error>;
+
     /// Returns the capabilities of the server.
     fn server_features(&self) -> Result<ServerFeaturesRes, Error>;
 
@@ -218,4 +402,210 @@ pub trait ElectrumApi {
     #[cfg(feature = "debug-calls")]
     /// Returns the number of network calls made since the creation of the client.
     fn calls_made(&self) -> Result<usize, Error>;
+}
+
+#[cfg(test)]
+mod test {
+    use super::ElectrumApi;
+    use crate::{
+        Batch, Error, GetBalanceRes, GetHeadersRes, GetHistoryRes, GetMempoolRes, GetMerkleRes,
+        ListUnspentRes, Param, RawHeaderNotification, ScriptStatus, ServerFeaturesRes, TxRes,
+        TxidFromPosRes,
+    };
+    use bp::{ScriptPubkey, Txid};
+    use serde_json::Value;
+    use std::borrow::Borrow;
+    use std::{borrow::Cow, sync::Arc};
+
+    #[derive(Debug, Clone)]
+    struct FakeApi;
+
+    #[allow(unused_variables)]
+    impl ElectrumApi for FakeApi {
+        fn transaction_get_verbose(&self, txid: &Txid) -> Result<Option<TxRes>, Error> {
+            unreachable!()
+        }
+
+        fn raw_call(
+            &self,
+            method_name: &str,
+            params: impl IntoIterator<Item = Param>,
+        ) -> Result<Value, Error> {
+            unreachable!()
+        }
+
+        fn batch_call(&self, batch: &Batch) -> Result<Vec<Value>, Error> {
+            unreachable!()
+        }
+
+        fn block_headers_subscribe_raw(&self) -> Result<RawHeaderNotification, Error> {
+            unreachable!()
+        }
+
+        fn block_headers_pop_raw(&self) -> Result<Option<RawHeaderNotification>, Error> {
+            unreachable!()
+        }
+
+        fn block_header_raw(&self, height: usize) -> Result<Vec<u8>, Error> {
+            unreachable!()
+        }
+
+        fn block_headers(&self, start_height: usize, count: usize) -> Result<GetHeadersRes, Error> {
+            unreachable!()
+        }
+
+        fn estimate_fee(&self, number: usize) -> Result<f64, Error> {
+            unreachable!()
+        }
+
+        fn relay_fee(&self) -> Result<f64, Error> {
+            unreachable!()
+        }
+
+        fn script_subscribe(&self, script: &ScriptPubkey) -> Result<Option<ScriptStatus>, Error> {
+            unreachable!()
+        }
+
+        fn batch_script_subscribe<'s, I>(
+            &self,
+            scripts: I,
+        ) -> Result<Vec<Option<ScriptStatus>>, Error>
+        where
+            I: IntoIterator + Clone,
+            I::Item: Borrow<&'s ScriptPubkey>,
+        {
+            unreachable!()
+        }
+
+        fn script_unsubscribe(&self, script: &ScriptPubkey) -> Result<bool, Error> {
+            unreachable!()
+        }
+
+        fn script_pop(&self, script: &ScriptPubkey) -> Result<Option<ScriptStatus>, Error> {
+            unreachable!()
+        }
+
+        fn script_get_balance(&self, script: &ScriptPubkey) -> Result<GetBalanceRes, Error> {
+            unreachable!()
+        }
+
+        fn batch_script_get_balance<'s, I>(&self, scripts: I) -> Result<Vec<GetBalanceRes>, Error>
+        where
+            I: IntoIterator + Clone,
+            I::Item: Borrow<&'s ScriptPubkey>,
+        {
+            unreachable!()
+        }
+
+        fn script_get_history(&self, script: &ScriptPubkey) -> Result<Vec<GetHistoryRes>, Error> {
+            unreachable!()
+        }
+
+        fn batch_script_get_history<'s, I>(
+            &self,
+            scripts: I,
+        ) -> Result<Vec<Vec<GetHistoryRes>>, Error>
+        where
+            I: IntoIterator + Clone,
+            I::Item: Borrow<&'s ScriptPubkey>,
+        {
+            unreachable!()
+        }
+
+        fn script_list_unspent(&self, script: &ScriptPubkey) -> Result<Vec<ListUnspentRes>, Error> {
+            unreachable!()
+        }
+
+        fn batch_script_list_unspent<'s, I>(
+            &self,
+            scripts: I,
+        ) -> Result<Vec<Vec<ListUnspentRes>>, Error>
+        where
+            I: IntoIterator + Clone,
+            I::Item: Borrow<&'s ScriptPubkey>,
+        {
+            unreachable!()
+        }
+
+        fn script_get_mempool(&self, script: &ScriptPubkey) -> Result<Vec<GetMempoolRes>, Error> {
+            unreachable!()
+        }
+
+        fn transaction_get_raw(&self, txid: &Txid) -> Result<Option<Vec<u8>>, Error> {
+            unreachable!()
+        }
+
+        fn batch_transaction_get_raw<'t, I>(&self, txids: I) -> Result<Vec<Vec<u8>>, Error>
+        where
+            I: IntoIterator + Clone,
+            I::Item: Borrow<&'t Txid>,
+        {
+            unreachable!()
+        }
+
+        fn batch_block_header_raw<I>(&self, heights: I) -> Result<Vec<Vec<u8>>, Error>
+        where
+            I: IntoIterator + Clone,
+            I::Item: Borrow<u32>,
+        {
+            unreachable!()
+        }
+
+        fn batch_estimate_fee<I>(&self, numbers: I) -> Result<Vec<f64>, Error>
+        where
+            I: IntoIterator + Clone,
+            I::Item: Borrow<usize>,
+        {
+            unreachable!()
+        }
+
+        fn transaction_broadcast_raw(&self, raw_tx: &[u8]) -> Result<Txid, Error> {
+            unreachable!()
+        }
+
+        fn transaction_get_merkle(
+            &self,
+            txid: &Txid,
+            height: usize,
+        ) -> Result<GetMerkleRes, Error> {
+            unreachable!()
+        }
+
+        fn txid_from_pos(&self, height: usize, tx_pos: usize) -> Result<Txid, Error> {
+            unreachable!()
+        }
+
+        fn txid_from_pos_with_merkle(
+            &self,
+            height: usize,
+            tx_pos: usize,
+        ) -> Result<TxidFromPosRes, Error> {
+            unreachable!()
+        }
+
+        fn server_features(&self) -> Result<ServerFeaturesRes, Error> {
+            unreachable!()
+        }
+
+        fn ping(&self) -> Result<(), Error> {
+            unreachable!()
+        }
+
+        #[cfg(feature = "debug-calls")]
+        /// Returns the number of network calls made since the creation of the client.
+        fn calls_made(&self) -> Result<usize, Error> {
+            unreachable!()
+        }
+    }
+
+    fn is_impl<A: ElectrumApi>() {}
+
+    #[test]
+    fn deref() {
+        is_impl::<FakeApi>();
+        is_impl::<&FakeApi>();
+        is_impl::<Arc<FakeApi>>();
+        is_impl::<Box<FakeApi>>();
+        is_impl::<Cow<FakeApi>>();
+    }
 }

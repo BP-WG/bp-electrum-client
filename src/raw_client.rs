@@ -5,7 +5,7 @@
 use amplify::hex::{FromHex, ToHex};
 use bp::{BlockHash, BlockHeader, ConsensusDecode, ScriptPubkey, Tx, Txid};
 use std::borrow::Borrow;
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::mem::drop;
 use std::net::{TcpStream, ToSocketAddrs};
@@ -21,10 +21,18 @@ use log::{debug, error, info, trace, warn};
 use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
 
 #[cfg(all(
-    any(feature = "default", feature = "use-rustls"),
+    any(
+        feature = "default",
+        feature = "use-rustls",
+        feature = "use-rustls-ring"
+    ),
     not(feature = "use-openssl")
 ))]
-use rustls::{pki_types::ServerName, ClientConfig, ClientConnection, RootCertStore, StreamOwned};
+use rustls::{
+    pki_types::ServerName,
+    pki_types::{Der, TrustAnchor},
+    ClientConfig, ClientConnection, RootCertStore, StreamOwned,
+};
 
 #[cfg(any(feature = "default", feature = "proxy"))]
 use crate::socks::{Socks5Stream, TargetAddr, ToTargetAddr};
@@ -280,28 +288,38 @@ impl RawClient<ElectrumSslStream> {
 }
 
 #[cfg(all(
-    any(feature = "default", feature = "use-rustls"),
+    any(
+        feature = "default",
+        feature = "use-rustls",
+        feature = "use-rustls-ring"
+    ),
     not(feature = "use-openssl")
 ))]
 mod danger {
     use crate::raw_client::ServerName;
-    use rustls::client::danger::ServerCertVerified;
-    use rustls::pki_types::CertificateDer;
-    use rustls::pki_types::UnixTime;
-    use rustls::Error;
+    use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified};
+    use rustls::crypto::CryptoProvider;
+    use rustls::pki_types::{CertificateDer, UnixTime};
+    use rustls::DigitallySignedStruct;
 
     #[derive(Debug)]
-    pub struct NoCertificateVerification {}
+    pub struct NoCertificateVerification(CryptoProvider);
+
+    impl NoCertificateVerification {
+        pub fn new(provider: CryptoProvider) -> Self {
+            Self(provider)
+        }
+    }
 
     impl rustls::client::danger::ServerCertVerifier for NoCertificateVerification {
         fn verify_server_cert(
             &self,
-            _end_entity: &CertificateDer,
-            _intermediates: &[CertificateDer],
-            _server_name: &ServerName,
-            _ocsp_response: &[u8],
+            _end_entity: &CertificateDer<'_>,
+            _intermediates: &[CertificateDer<'_>],
+            _server_name: &ServerName<'_>,
+            _ocsp: &[u8],
             _now: UnixTime,
-        ) -> Result<ServerCertVerified, Error> {
+        ) -> Result<ServerCertVerified, rustls::Error> {
             Ok(ServerCertVerified::assertion())
         }
 
@@ -309,34 +327,42 @@ mod danger {
             &self,
             _message: &[u8],
             _cert: &CertificateDer<'_>,
-            _dss: &rustls::DigitallySignedStruct,
-        ) -> Result<rustls::client::danger::HandshakeSignatureValid, Error> {
-            Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+            _dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
         }
 
         fn verify_tls13_signature(
             &self,
             _message: &[u8],
             _cert: &CertificateDer<'_>,
-            _dss: &rustls::DigitallySignedStruct,
-        ) -> Result<rustls::client::danger::HandshakeSignatureValid, Error> {
-            Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+            _dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
         }
 
         fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-            vec![]
+            self.0.signature_verification_algorithms.supported_schemes()
         }
     }
 }
 
 #[cfg(all(
-    any(feature = "default", feature = "use-rustls"),
+    any(
+        feature = "default",
+        feature = "use-rustls",
+        feature = "use-rustls-ring"
+    ),
     not(feature = "use-openssl")
 ))]
 /// Transport type used to establish a Rustls TLS encrypted/authenticated connection with the server
 pub type ElectrumSslStream = StreamOwned<ClientConnection, TcpStream>;
 #[cfg(all(
-    any(feature = "default", feature = "use-rustls"),
+    any(
+        feature = "default",
+        feature = "use-rustls",
+        feature = "use-rustls-ring"
+    ),
     not(feature = "use-openssl")
 ))]
 impl RawClient<ElectrumSslStream> {
@@ -380,12 +406,18 @@ impl RawClient<ElectrumSslStream> {
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let builder = ClientConfig::builder();
 
+        let builder = ClientConfig::builder();
+
         let config = if validate_domain {
             socket_addr.domain().ok_or(Error::MissingDomain)?;
 
             let store = webpki_roots::TLS_SERVER_ROOTS
-                .into_iter()
-                .cloned()
+                .iter()
+                .map(|t| TrustAnchor {
+                    subject: Der::from_slice(t.subject),
+                    subject_public_key_info: Der::from_slice(t.spki),
+                    name_constraints: t.name_constraints.map(Der::from_slice),
+                })
                 .collect::<RootCertStore>();
 
             // TODO: cert pinning
@@ -393,8 +425,11 @@ impl RawClient<ElectrumSslStream> {
         } else {
             builder
                 .dangerous()
-                .with_custom_certificate_verifier(std::sync::Arc::new(
-                    danger::NoCertificateVerification {},
+                .with_custom_certificate_verifier(Arc::new(
+                    #[cfg(feature = "use-rustls")]
+                    danger::NoCertificateVerification::new(rustls::crypto::aws_lc_rs::default_provider()),
+                    #[cfg(feature = "use-rustls-ring")]
+                    danger::NoCertificateVerification::new(rustls::crypto::ring::default_provider()),
                 ))
                 .with_no_client_auth()
         };
@@ -441,7 +476,11 @@ impl RawClient<ElectrumProxyStream> {
         Ok(stream.into())
     }
 
-    #[cfg(any(feature = "use-openssl", feature = "use-rustls"))]
+    #[cfg(any(
+        feature = "use-openssl",
+        feature = "use-rustls",
+        feature = "use-rustls-ring"
+    ))]
     /// Creates a new TLS client that connects to `target_addr` using `proxy_addr` as a socks proxy
     /// server. The DNS resolution of `target_addr`, if required, is done through the proxy. This
     /// allows to specify, for instance, `.onion` addresses.
@@ -500,11 +539,10 @@ impl<S: Read + Write> RawClient<S> {
 
                 if let Some(until_message) = until_message {
                     // If we are trying to start a reader thread but the corresponding sender is
-                    // missing from the map, exit immediately. This can happen with batch calls,
-                    // since the sender is shared for all the individual queries in a call. We
-                    // might have already received a response for that id, but we don't know it
-                    // yet. Exiting here forces the calling code to fallback to the sender-receiver
-                    // method, and it should find a message there waiting for it.
+                    // missing from the map, exit immediately. We might have already received a
+                    // response for that id, but we don't know it yet. Exiting here forces the
+                    // calling code to fallback to the sender-receiver method, and it should find
+                    // a message there waiting for it.
                     if self.waiting_map.lock()?.get(&until_message).is_none() {
                         return Err(Error::CouldntLockReader);
                     }
@@ -724,12 +762,10 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     fn batch_call(&self, batch: &Batch) -> Result<Vec<serde_json::Value>, Error> {
         let mut raw = Vec::new();
 
-        let mut missing_responses = BTreeSet::new();
+        let mut missing_responses = Vec::new();
         let mut answers = BTreeMap::new();
 
-        // Add our listener to the map before we send the request, Here we will clone the sender
-        // for every request id, so that we only have to monitor one receiver.
-        let (sender, receiver) = channel();
+        // Add our listener to the map before we send the request
 
         for (method, params) in batch.iter() {
             let req = Request::new_id(
@@ -737,9 +773,12 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
                 method,
                 params.to_vec(),
             );
-            missing_responses.insert(req.id);
+            // Add distinct channel to each request so when we remove our request id (and sender) from the waiting_map
+            // we can be sure that the response gets sent to the correct channel in self.recv
+            let (sender, receiver) = channel();
+            missing_responses.push((req.id, receiver));
 
-            self.waiting_map.lock()?.insert(req.id, sender.clone());
+            self.waiting_map.lock()?.insert(req.id, sender);
 
             raw.append(&mut serde_json::to_vec(&req)?);
             raw.extend_from_slice(b"\n");
@@ -758,8 +797,8 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
 
         self.increment_calls();
 
-        for req_id in missing_responses.iter() {
-            match self.recv(&receiver, *req_id) {
+        for (req_id, receiver) in missing_responses.iter() {
+            match self.recv(receiver, *req_id) {
                 Ok(mut resp) => answers.insert(req_id, resp["result"].take()),
                 Err(e) => {
                     // In case of error our sender could still be left in the map, depending on where
@@ -767,7 +806,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
                     warn!("got error for req_id {}: {:?}", req_id, e);
                     warn!("removing all waiting req of this batch");
                     let mut guard = self.waiting_map.lock()?;
-                    for req_id in missing_responses.iter() {
+                    for (req_id, _) in missing_responses.iter() {
                         guard.remove(req_id);
                     }
                     return Err(e);
@@ -1135,6 +1174,38 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         Ok(serde_json::from_value(result)?)
     }
 
+    fn txid_from_pos(&self, height: usize, tx_pos: usize) -> Result<Txid, Error> {
+        let params = vec![Param::Usize(height), Param::Usize(tx_pos)];
+        let req = Request::new_id(
+            self.last_id.fetch_add(1, Ordering::SeqCst),
+            "blockchain.transaction.id_from_pos",
+            params,
+        );
+        let result = self.call(req)?;
+
+        Ok(serde_json::from_value(result)?)
+    }
+
+    fn txid_from_pos_with_merkle(
+        &self,
+        height: usize,
+        tx_pos: usize,
+    ) -> Result<TxidFromPosRes, Error> {
+        let params = vec![
+            Param::Usize(height),
+            Param::Usize(tx_pos),
+            Param::Bool(true),
+        ];
+        let req = Request::new_id(
+            self.last_id.fetch_add(1, Ordering::SeqCst),
+            "blockchain.transaction.id_from_pos",
+            params,
+        );
+        let result = self.call(req)?;
+
+        Ok(serde_json::from_value(result)?)
+    }
+
     fn server_features(&self) -> Result<ServerFeaturesRes, Error> {
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
@@ -1192,6 +1263,26 @@ mod test {
         assert_eq!(resp.hash_function, Some("sha256".into()));
         assert_eq!(resp.pruning, None);
     }
+
+    #[test]
+    #[ignore = "depends on a live server"]
+    fn test_batch_response_ordering() {
+        // The electrum.blockstream.info:50001 node always sends back ordered responses which will make this always pass.
+        // However, many servers do not, so we use one of those servers for this test.
+        let client = RawClient::new("exs.dyshek.org:50001", None).unwrap();
+        let heights: Vec<u32> = vec![1, 4, 8, 12, 222, 6666, 12];
+        let result_times = [
+            1231469665, 1231470988, 1231472743, 1231474888, 1231770653, 1236456633, 1231474888,
+        ];
+        // Check ordering 10 times. This usually fails within 5 if ordering is incorrect.
+        for _ in 0..10 {
+            let results = client.batch_block_header(&heights).unwrap();
+            for (index, result) in results.iter().enumerate() {
+                assert_eq!(result_times[index], result.time);
+            }
+        }
+    }
+
     #[test]
     fn test_relay_fee() {
         let client = RawClient::new(get_test_server(), None).unwrap();
@@ -1411,6 +1502,35 @@ mod test {
             &fail_block_header.merkle_root,
             &resp
         ));
+    }
+
+    #[test]
+    fn test_txid_from_pos() {
+        let client = RawClient::new(get_test_server(), None).unwrap();
+
+        let txid =
+            Txid::from_str("1f7ff3c407f33eabc8bec7d2cc230948f2249ec8e591bcf6f971ca9366c8788d")
+                .unwrap();
+        let resp = client.txid_from_pos(630000, 68).unwrap();
+        assert_eq!(resp, txid);
+    }
+
+    #[test]
+    fn test_txid_from_pos_with_merkle() {
+        let client = RawClient::new(get_test_server(), None).unwrap();
+
+        let txid =
+            Txid::from_str("1f7ff3c407f33eabc8bec7d2cc230948f2249ec8e591bcf6f971ca9366c8788d")
+                .unwrap();
+        let resp = client.txid_from_pos_with_merkle(630000, 68).unwrap();
+        assert_eq!(resp.tx_hash, txid);
+        assert_eq!(
+            resp.merkle[0],
+            [
+                34, 65, 51, 64, 49, 139, 115, 189, 185, 246, 70, 225, 168, 193, 217, 195, 47, 66,
+                179, 240, 153, 24, 114, 215, 144, 196, 212, 41, 39, 155, 246, 25
+            ]
+        );
     }
 
     #[test]

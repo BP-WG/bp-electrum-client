@@ -147,7 +147,6 @@ impl Client {
     /// If no prefix is specified, then `tcp://` is assumed.
     ///
     /// See [Client::from_config] for more configuration options
-    ///
     pub fn new(url: &str) -> Result<Self, Error> {
         Self::from_config(url, Config::default())
     }
@@ -333,6 +332,20 @@ impl ElectrumApi for Client {
     #[inline]
     fn transaction_get_merkle(&self, txid: &Txid, height: usize) -> Result<GetMerkleRes, Error> {
         impl_inner_call!(self, transaction_get_merkle, txid, height)
+    }
+
+    #[inline]
+    fn txid_from_pos(&self, height: usize, tx_pos: usize) -> Result<Txid, Error> {
+        impl_inner_call!(self, txid_from_pos, height, tx_pos)
+    }
+
+    #[inline]
+    fn txid_from_pos_with_merkle(
+        &self,
+        height: usize,
+        tx_pos: usize,
+    ) -> Result<TxidFromPosRes, Error> {
+        impl_inner_call!(self, txid_from_pos_with_merkle, height, tx_pos)
     }
 
     #[inline]
