@@ -297,8 +297,6 @@ pub enum Error {
     NotSubscribed(ScriptHash),
     /// Error during the deserialization of a response from the server
     InvalidResponse(serde_json::Value),
-    /// Generic error with a message
-    Message(String),
     /// Invalid domain name for an SSL certificate
     InvalidDNSNameError(String),
     /// Missing domain while it was explicitly asked to validate it
@@ -341,7 +339,6 @@ impl Display for Error {
             #[cfg(feature = "use-rustls")]
             Error::CouldNotCreateConnection(e) => Display::fmt(e, f),
 
-            Error::Message(e) => f.write_str(e),
             Error::InvalidDNSNameError(domain) => write!(f, "Invalid domain name {} not matching SSL certificate", domain),
             Error::AllAttemptsErrored(errors) => {
                 f.write_str("Made one or multiple attempts, all errored:\n")?;
