@@ -38,7 +38,7 @@ extern crate webpki_roots;
 extern crate byteorder;
 
 extern crate amplify;
-extern crate bpstd;
+extern crate bp;
 #[cfg(all(unix, any(feature = "default", feature = "proxy")))]
 extern crate libc;
 extern crate sha2;

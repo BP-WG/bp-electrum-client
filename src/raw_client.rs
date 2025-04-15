@@ -3,7 +3,7 @@
 //! This module contains the definition of the raw client that wraps the transport method
 
 use amplify::hex::{FromHex, ToHex};
-use bpstd::{BlockHash, BlockHeader, ConsensusDecode, ScriptPubkey, Tx, Txid};
+use bp::{BlockHash, BlockHeader, ConsensusDecode, ScriptPubkey, Tx, Txid};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -1165,7 +1165,8 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
 
 #[cfg(test)]
 mod test {
-    use bpstd::{Address, TxVer};
+    use bp::TxVer;
+    use invoice::Address;
     use std::str::FromStr;
 
     use super::*;

@@ -1,6 +1,6 @@
 //! Electrum APIs
 
-use bpstd::{BlockHeader, ConsensusDecode, ConsensusEncode, ScriptPubkey, Tx, Txid};
+use bp::{BlockHeader, ConsensusDecode, ConsensusEncode, ScriptPubkey, Tx, Txid};
 use std::borrow::Borrow;
 use std::convert::TryInto;
 

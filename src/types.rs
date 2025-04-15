@@ -4,9 +4,7 @@
 
 use amplify::hex;
 use amplify::hex::{FromHex, ToHex};
-use bpstd::{
-    BlockHash, BlockHeader, ConsensusDecode, ConsensusDecodeError, ScriptPubkey, Tx, Txid,
-};
+use bp::{BlockHash, BlockHeader, ConsensusDecode, ConsensusDecodeError, ScriptPubkey, Tx, Txid};
 use std::convert::TryFrom;
 use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
