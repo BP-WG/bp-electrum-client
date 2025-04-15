@@ -30,9 +30,12 @@ pub trait ElectrumApi {
     }
 
     /// Gets the transaction with `txid`. Returns an error if not found.
-    fn transaction_get(&self, txid: &Txid) -> Result<Tx, Error> {
-        Ok(Tx::consensus_deserialize(&self.transaction_get_raw(txid)?)?)
+    fn transaction_get(&self, txid: &Txid) -> Result<Option<Tx>, Error> {
+        Ok(self.transaction_get_raw(txid)?.map(Tx::consensus_deserialize).transpose()?)
     }
+
+    /// Gets the transaction with `txid`, including additional verbose details returned by Butcoin Core. Returns an error if not found.
+    fn transaction_get_verbose(&self, txid: &Txid) -> Result<Option<TxRes>, Error>;
 
     /// Batch version of [`transaction_get`](#method.transaction_get).
     ///
@@ -167,12 +170,12 @@ pub trait ElectrumApi {
         I::Item: Borrow<&'s ScriptPubkey>;
 
     /// Return the unconfirmed transactions of a script hash.
-    /// 
+    ///
     /// Added in version 1.1.
     fn script_get_mempool(&self, script: &ScriptPubkey) -> Result<Vec<GetMempoolRes>, Error>;
 
-        /// Gets the raw bytes of a transaction with `txid`. Returns an error if not found.
-    fn transaction_get_raw(&self, txid: &Txid) -> Result<Vec<u8>, Error>;
+    /// Gets the raw bytes of a transaction with `txid`. Returns an error if not found.
+    fn transaction_get_raw(&self, txid: &Txid) -> Result<Option<Vec<u8>>, Error>;
 
     /// Batch version of [`transaction_get_raw`](#method.transaction_get_raw).
     ///

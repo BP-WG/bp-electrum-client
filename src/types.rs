@@ -4,7 +4,9 @@
 
 use amplify::hex;
 use amplify::hex::{FromHex, ToHex};
-use bpstd::{BlockHeader, ConsensusDecode, ConsensusDecodeError, ScriptPubkey, Txid};
+use bpstd::{
+    BlockHash, BlockHeader, ConsensusDecode, ConsensusDecodeError, ScriptPubkey, Tx, Txid,
+};
 use std::convert::TryFrom;
 use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
@@ -191,6 +193,19 @@ pub struct GetMempoolRes {
     pub tx_hash: Txid,
     /// The transaction fee in minimum coin units (satoshis).
     pub fee: u64,
+}
+
+/// Response to a [`script_list_unspent`](../client/struct.Client.html#method.get_transaction_verbose) request.
+#[derive(Clone, Debug, Deserialize)]
+pub struct TxRes {
+    /// The number of confirmations; zero if the transaction is unconfirmed.
+    pub confirmations: u32,
+    /// The hash of the block where the transaction is mined.
+    pub block_hash: Option<BlockHash>,
+    /// The block time expressed in UNIX epoch time.
+    pub time: Option<u64>,
+    /// Transaction source
+    pub tx: Tx,
 }
 
 /// Response to a [`server_features`](../client/struct.Client.html#method.server_features) request.

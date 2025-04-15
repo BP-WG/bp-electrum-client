@@ -3,7 +3,7 @@
 //! This module contains the definition of the raw client that wraps the transport method
 
 use amplify::hex::{FromHex, ToHex};
-use bpstd::{BlockHeader, ConsensusDecode, ScriptPubkey, Txid};
+use bpstd::{BlockHash, BlockHeader, ConsensusDecode, ScriptPubkey, Tx, Txid};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -593,7 +593,8 @@ impl<S: Read + Write> RawClient<S> {
 
         let resp = resp?;
         if let Some(err) = resp.get("error") {
-            let err = serde_json::from_value(err.clone()).map_err(|_| Error::InvalidResponse(resp.clone()))?;
+            let err = serde_json::from_value(err.clone())
+                .map_err(|_| Error::InvalidResponse(resp.clone()))?;
             Err(Error::Protocol(err))
         } else {
             Ok(resp)
@@ -1003,20 +1004,78 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         Ok(serde_json::from_value(result)?)
     }
 
-    fn transaction_get_raw(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
+    fn transaction_get_raw(&self, txid: &Txid) -> Result<Option<Vec<u8>>, Error> {
         let params = vec![Param::String(format!("{:x}", txid))];
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
             "blockchain.transaction.get",
             params,
         );
-        let result = self.call(req)?;
+        let result = match self.call(req) {
+            Ok(result) => result,
+            Err(Error::Protocol(_)) => return Ok(None),
+            Err(e) => Err(e)?,
+        };
 
-        Ok(Vec::<u8>::from_hex(
+        Ok(Some(Vec::<u8>::from_hex(
             result
                 .as_str()
                 .ok_or_else(|| Error::InvalidResponse(result.clone()))?,
-        )?)
+        )?))
+    }
+
+    fn transaction_get_verbose(&self, txid: &Txid) -> Result<Option<TxRes>, Error> {
+        let params = vec![Param::String(format!("{:x}", txid)), Param::Bool(true)];
+        let req = Request::new_id(
+            self.last_id.fetch_add(1, Ordering::SeqCst),
+            "blockchain.transaction.get",
+            params,
+        );
+        let result = match self.call(req) {
+            Ok(result) => result,
+            Err(Error::Protocol(_)) => return Ok(None),
+            Err(e) => Err(e)?,
+        };
+
+        let confirmations = result
+            .get("confirmations")
+            .map(|v| {
+                v.as_u64()
+                    .map(u32::try_from)
+                    .transpose()
+                    .ok()
+                    .flatten()
+                    .ok_or_else(|| Error::InvalidResponse(v.clone()))
+            })
+            .transpose()?
+            .unwrap_or_default();
+        let block_hash = result
+            .get("blockhash")
+            .map(|hex| {
+                let s = hex
+                    .as_str()
+                    .ok_or_else(|| Error::InvalidResponse(hex.clone()))?;
+                let data = Vec::<u8>::from_hex(s)?;
+                Result::<_, Error>::Ok(BlockHash::consensus_deserialize(data)?)
+            })
+            .transpose()?;
+        let time = result
+            .get("blocktime")
+            .map(|v| v.as_u64().ok_or_else(|| Error::InvalidResponse(v.clone())))
+            .transpose()?;
+        let tx = Vec::<u8>::from_hex(
+            result
+                .as_str()
+                .ok_or_else(|| Error::InvalidResponse(result.clone()))?,
+        )?;
+        let tx = Tx::consensus_deserialize(tx)?;
+
+        Ok(Some(TxRes {
+            confirmations,
+            block_hash,
+            time,
+            tx,
+        }))
     }
 
     fn batch_transaction_get_raw<'t, I>(&self, txids: I) -> Result<Vec<Vec<u8>>, Error>
@@ -1272,6 +1331,7 @@ mod test {
                 &Txid::from_str("cc2ca076fd04c2aeed6d02151c447ced3d09be6fb4d4ef36cb5ed4e7a3260566")
                     .unwrap(),
             )
+            .unwrap()
             .unwrap();
         assert_eq!(resp.version, TxVer::V1);
         assert_eq!(resp.lock_time.to_consensus_u32(), 0);
@@ -1289,7 +1349,7 @@ mod test {
             .unwrap();
         assert_eq!(
             resp,
-            vec![
+            Some(vec![
                 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 84, 3, 240, 156, 9, 27, 77,
                 105, 110, 101, 100, 32, 98, 121, 32, 65, 110, 116, 80, 111, 111, 108, 49, 49, 57,
@@ -1305,7 +1365,7 @@ mod test {
                 211, 234, 106, 41, 76, 223, 58, 4, 46, 151, 48, 9, 88, 68, 112, 161, 41, 22, 17,
                 30, 44, 170, 1, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-            ]
+            ])
         )
     }
 
