@@ -593,7 +593,8 @@ impl<S: Read + Write> RawClient<S> {
 
         let resp = resp?;
         if let Some(err) = resp.get("error") {
-            Err(Error::Protocol(err.clone()))
+            let err = serde_json::from_value(err.clone()).map_err(|_| Error::InvalidResponse(resp.clone()))?;
+            Err(Error::Protocol(err))
         } else {
             Ok(resp)
         }

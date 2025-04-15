@@ -278,6 +278,15 @@ pub struct ScriptNotification {
     pub status: ScriptStatus,
 }
 
+/// Error information returned by the Electrum server
+#[derive(Clone, Debug, Deserialize)]
+pub struct ProtocolError {
+    /// Custom RPC error code (from -32000 to -32099)
+    pub code: i16,
+    /// Error detailed description
+    pub message: String,
+}
+
 /// Errors
 #[derive(Debug)]
 pub enum Error {
@@ -287,8 +296,10 @@ pub enum Error {
     JSON(serde_json::error::Error),
     /// Wraps `bitcoin::hex::HexToBytesError`
     Hex(hex::Error),
+    /// Error returned by the Electrym server due to a wrong use of Electrym RPC
+    JSONRpc(String),
     /// Error returned by the Electrum server
-    Protocol(serde_json::Value),
+    Protocol(ProtocolError),
     /// Error during the deserialization of a Bitcoin data structure
     Bitcoin(ConsensusDecodeError),
     /// Already subscribed to the notifications of an address
@@ -348,8 +359,9 @@ impl Display for Error {
                 Ok(())
             }
 
-            Error::Protocol(e) => write!(f, "Electrum server error: {}", e.clone().take()),
-            Error::InvalidResponse(e) => write!(f, "Error during the deserialization of a response from the server: {}", e.clone().take()),
+            Error::JSONRpc(msg) => write!(f, "Invalid use of Electrum JSON-RPC: {msg}"),
+            Error::Protocol(err) => write!(f, "Electrum server returned an error: ({}) {}", err.code, err.message),
+            Error::InvalidResponse(e) => write!(f, "Error during the deserialization of a response from the server: {e}"),
 
             // TODO: Print out addresses once `ScriptHash` will implement `Display`
             Error::AlreadySubscribed(_) => write!(f, "Already subscribed to the notifications of an address"),
