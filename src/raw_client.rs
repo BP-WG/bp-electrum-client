@@ -1094,7 +1094,8 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
             .transpose()?;
         let tx = Vec::<u8>::from_hex(
             result
-                .as_str()
+                .get("hex")
+                .and_then(serde_json::Value::as_str)
                 .ok_or_else(|| Error::InvalidResponse(result.clone()))?,
         )?;
         let tx = Tx::consensus_deserialize(tx)?;
