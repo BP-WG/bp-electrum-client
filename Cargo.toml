@@ -1,6 +1,6 @@
 [package]
 name = "bp-electrum"
-version = "0.11.1-alpha.1"
+version = "0.11.1-alpha.2+unreviewed"
 authors = ["Alekos Filini <alekos.filini@gmail.com>", "Dr Maxim Orlovsky <orlovsky@lnp-bp.org>"]
 license = "MIT"
 homepage = "https://github.com/BP-WG/bp-electrum-client"
@@ -10,17 +10,17 @@ description = "Bitcoin Electrum client library. Supports plaintext, TLS and Onio
 keywords = ["bitcoin", "electrum"]
 readme = "README.md"
 edition = "2021"
-rust-version = "1.80.0"
+rust-version = "1.81.0"
 
 [lib]
 name = "electrum"
 path = "src/lib.rs"
 
 [dependencies]
-amplify = "4.7.0"
+amplify = "4.8.0"
 sha2 = "0.10.8"
 log = "^0.4"
-bp-core = { version = "0.11.1-alpha.1", features = ["serde"] }
+bp-core = { version = "0.11.1-alpha.2", features = ["serde"] }
 serde = { version = "^1.0", features = ["derive"] }
 serde_json = { version = "^1.0" }
 
@@ -32,7 +32,7 @@ webpki-roots = { version = "0.26", optional = true }
 byteorder = { version = "1.0", optional = true }
 
 [dev-dependencies]
-bp-invoice = "0.11.1-alpha.1"
+bp-invoice = "0.11.1-alpha.2"
 
 [target.'cfg(unix)'.dependencies]
 libc = { version = "0.2", optional = true }
