@@ -8,9 +8,9 @@ use crate::api::ElectrumApi;
 use crate::batch::Batch;
 use crate::config::Config;
 use crate::raw_client::*;
-use std::convert::TryFrom;
-use bpstd::{ScriptPubkey, Txid};
 use crate::types::*;
+use bp::{ScriptPubkey, Txid};
+use std::convert::TryFrom;
 
 /// Generalized Electrum client that supports multiple backends. This wraps
 /// [`RawClient`](client/struct.RawClient.html) and provides a more user-friendly
@@ -71,7 +71,7 @@ macro_rules! impl_inner_call {
                             std::thread::sleep(std::time::Duration::from_secs((1 << errors.len()).min(30) as u64));
                             match ClientType::from_config(&$self.url, &$self.config) {
                                 Ok(new_client) => {
-                                    info!("Succesfully created new client");
+                                    info!("Successfully created new client");
                                     *write_client = new_client;
                                     break;
                                 },
@@ -147,7 +147,6 @@ impl Client {
     /// If no prefix is specified, then `tcp://` is assumed.
     ///
     /// See [Client::from_config] for more configuration options
-    ///
     pub fn new(url: &str) -> Result<Self, Error> {
         Self::from_config(url, Config::default())
     }
@@ -285,8 +284,16 @@ impl ElectrumApi for Client {
         impl_inner_call!(self, batch_script_list_unspent, scripts.clone())
     }
 
+    fn script_get_mempool(&self, script: &ScriptPubkey) -> Result<Vec<GetMempoolRes>, Error> {
+        impl_inner_call!(self, script_get_mempool, script)
+    }
+
+    fn transaction_get_verbose(&self, txid: &Txid) -> Result<Option<TxRes>, Error> {
+        impl_inner_call!(self, transaction_get_verbose, txid)
+    }
+
     #[inline]
-    fn transaction_get_raw(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
+    fn transaction_get_raw(&self, txid: &Txid) -> Result<Option<Vec<u8>>, Error> {
         impl_inner_call!(self, transaction_get_raw, txid)
     }
 
@@ -328,6 +335,20 @@ impl ElectrumApi for Client {
     }
 
     #[inline]
+    fn txid_from_pos(&self, height: usize, tx_pos: usize) -> Result<Txid, Error> {
+        impl_inner_call!(self, txid_from_pos, height, tx_pos)
+    }
+
+    #[inline]
+    fn txid_from_pos_with_merkle(
+        &self,
+        height: usize,
+        tx_pos: usize,
+    ) -> Result<TxidFromPosRes, Error> {
+        impl_inner_call!(self, txid_from_pos_with_merkle, height, tx_pos)
+    }
+
+    #[inline]
     fn server_features(&self) -> Result<ServerFeaturesRes, Error> {
         impl_inner_call!(self, server_features)
     }
@@ -352,7 +373,7 @@ mod tests {
     fn more_failed_attempts_than_retries_means_exhausted() {
         let exhausted = retries_exhausted(10, 5);
 
-        assert_eq!(exhausted, true)
+        assert!(exhausted)
     }
 
     #[test]
@@ -361,21 +382,21 @@ mod tests {
 
         let exhausted = retries_exhausted(failed_attempts, u8::MAX);
 
-        assert_eq!(exhausted, true)
+        assert!(exhausted)
     }
 
     #[test]
     fn less_failed_attempts_means_not_exhausted() {
         let exhausted = retries_exhausted(2, 5);
 
-        assert_eq!(exhausted, false)
+        assert!(!exhausted)
     }
 
     #[test]
     fn attempts_equals_retries_means_not_exhausted_yet() {
         let exhausted = retries_exhausted(2, 2);
 
-        assert_eq!(exhausted, false)
+        assert!(!exhausted)
     }
 
     #[test]
@@ -407,7 +428,7 @@ mod tests {
             sender.send(()).unwrap();
 
             for _stream in listener.incoming() {
-                loop {}
+                std::thread::sleep(std::time::Duration::from_secs(60));
             }
         });
 

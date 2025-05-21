@@ -1,9 +1,9 @@
 //! Utilities helping to handle Electrum-related data.
 
-use amplify::ByteArray;
-use bpstd::{BlockMerkleRoot, Txid};
-use sha2::{Digest, Sha256};
 use crate::types::GetMerkleRes;
+use amplify::ByteArray;
+use bp::{BlockMerkleRoot, Txid};
+use sha2::{Digest, Sha256};
 
 /// Verifies a Merkle inclusion proof as retrieved via [`transaction_get_merkle`] for a transaction with the
 /// given `txid` and `merkle_root` as included in the [`BlockHeader`].

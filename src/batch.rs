@@ -2,9 +2,8 @@
 //!
 //! This module contains definitions and helper functions used when making batch calls.
 
-
-use bpstd::{ScriptPubkey, Txid};
 use crate::types::{Call, Param, ToElectrumScriptHash};
+use bp::{ScriptPubkey, Txid};
 
 /// Helper structure that caches all the requests before they are actually sent to the server.
 ///
@@ -16,6 +15,7 @@ use crate::types::{Call, Param, ToElectrumScriptHash};
 /// [`Client`](../client/struct.Client.html), like
 /// [`batch_script_get_balance`](../client/struct.Client.html#method.batch_script_get_balance) to ask the
 /// server for the balance of multiple scripts with a single request.
+#[derive(Default)]
 pub struct Batch {
     calls: Vec<Call>,
 }
@@ -28,28 +28,28 @@ impl Batch {
 
     /// Add one `blockchain.scripthash.listunspent` request to the batch queue
     pub fn script_list_unspent(&mut self, script: &ScriptPubkey) {
-        let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
+        let params = vec![Param::String(script.to_electrum_scripthash().as_hex())];
         self.calls
             .push((String::from("blockchain.scripthash.listunspent"), params));
     }
 
     /// Add one `blockchain.scripthash.get_history` request to the batch queue
     pub fn script_get_history(&mut self, script: &ScriptPubkey) {
-        let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
+        let params = vec![Param::String(script.to_electrum_scripthash().as_hex())];
         self.calls
             .push((String::from("blockchain.scripthash.get_history"), params));
     }
 
     /// Add one `blockchain.scripthash.get_balance` request to the batch queue
     pub fn script_get_balance(&mut self, script: &ScriptPubkey) {
-        let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
+        let params = vec![Param::String(script.to_electrum_scripthash().as_hex())];
         self.calls
             .push((String::from("blockchain.scripthash.get_balance"), params));
     }
 
     /// Add one `blockchain.scripthash.listunspent` request to the batch queue
     pub fn script_subscribe(&mut self, script: &ScriptPubkey) {
-        let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
+        let params = vec![Param::String(script.to_electrum_scripthash().as_hex())];
         self.calls
             .push((String::from("blockchain.scripthash.subscribe"), params));
     }
@@ -105,11 +105,5 @@ impl<'a> Iterator for BatchIter<'a> {
         let val = self.batch.calls.get(self.index);
         self.index += 1;
         val
-    }
-}
-
-impl Default for Batch {
-    fn default() -> Self {
-        Batch { calls: Vec::new() }
     }
 }

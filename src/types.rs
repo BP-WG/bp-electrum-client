@@ -2,13 +2,13 @@
 //!
 //! This module contains definitions of all the complex data structures that are returned by calls
 
+use amplify::hex;
+use amplify::hex::{FromHex, ToHex};
+use bp::{BlockHash, BlockHeader, ConsensusDecode, ConsensusDecodeError, ScriptPubkey, Tx, Txid};
 use std::convert::TryFrom;
 use std::fmt::{self, Display, Formatter};
 use std::ops::Deref;
 use std::sync::Arc;
-use amplify::hex;
-use amplify::hex::{FromHex, ToHex};
-use bpstd::{BlockHeader, ConsensusDecode, ConsensusDecodeError, ScriptPubkey, Txid};
 
 use serde::{de, Deserialize, Serialize};
 use sha2::Digest;
@@ -85,7 +85,7 @@ impl From<[u8; 32]> for Hex32Bytes {
 }
 
 impl Hex32Bytes {
-    pub(crate) fn to_hex(&self) -> String {
+    pub(crate) fn as_hex(&self) -> String {
         self.0.to_hex()
     }
 }
@@ -182,6 +182,30 @@ pub struct ListUnspentRes {
     pub value: u64,
 }
 
+/// Response to a [`script_list_unspent`](../client/struct.Client.html#method.script_get_mempool) request.
+#[derive(Clone, Debug, Deserialize)]
+pub struct GetMempoolRes {
+    /// 0 if all inputs are confirmed, and -1 otherwise.
+    pub height: i32,
+    /// The transaction hash in hexadecimal.
+    pub tx_hash: Txid,
+    /// The transaction fee in minimum coin units (satoshis).
+    pub fee: u64,
+}
+
+/// Response to a [`script_list_unspent`](../client/struct.Client.html#method.get_transaction_verbose) request.
+#[derive(Clone, Debug, Deserialize)]
+pub struct TxRes {
+    /// The number of confirmations; zero if the transaction is unconfirmed.
+    pub confirmations: u32,
+    /// The hash of the block where the transaction is mined.
+    pub block_hash: Option<BlockHash>,
+    /// The block time expressed in UNIX epoch time.
+    pub time: Option<u64>,
+    /// Transaction source
+    pub tx: Tx,
+}
+
 /// Response to a [`server_features`](../client/struct.Client.html#method.server_features) request.
 #[derive(Clone, Debug, Deserialize)]
 pub struct ServerFeaturesRes {
@@ -238,6 +262,17 @@ pub struct GetMerkleRes {
     pub merkle: Vec<[u8; 32]>,
 }
 
+/// Response to a [`txid_from_pos_with_merkle`](../client/struct.Client.html#method.txid_from_pos_with_merkle)
+/// request.
+#[derive(Clone, Debug, Deserialize)]
+pub struct TxidFromPosRes {
+    /// Txid of the transaction.
+    pub tx_hash: Txid,
+    /// The merkle path of the transaction.
+    #[serde(deserialize_with = "from_hex_array")]
+    pub merkle: Vec<[u8; 32]>,
+}
+
 /// Notification of a new block header
 #[derive(Clone, Debug, Deserialize)]
 pub struct HeaderNotification {
@@ -278,6 +313,15 @@ pub struct ScriptNotification {
     pub status: ScriptStatus,
 }
 
+/// Error information returned by the Electrum server
+#[derive(Clone, Debug, Deserialize)]
+pub struct ProtocolError {
+    /// Custom RPC error code (from -32000 to -32099)
+    pub code: i16,
+    /// Error detailed description
+    pub message: String,
+}
+
 /// Errors
 #[derive(Debug)]
 pub enum Error {
@@ -287,8 +331,10 @@ pub enum Error {
     JSON(serde_json::error::Error),
     /// Wraps `bitcoin::hex::HexToBytesError`
     Hex(hex::Error),
+    /// Error returned by the Electrym server due to a wrong use of Electrym RPC
+    JSONRpc(String),
     /// Error returned by the Electrum server
-    Protocol(serde_json::Value),
+    Protocol(ProtocolError),
     /// Error during the deserialization of a Bitcoin data structure
     Bitcoin(ConsensusDecodeError),
     /// Already subscribed to the notifications of an address
@@ -297,8 +343,6 @@ pub enum Error {
     NotSubscribed(ScriptHash),
     /// Error during the deserialization of a response from the server
     InvalidResponse(serde_json::Value),
-    /// Generic error with a message
-    Message(String),
     /// Invalid domain name for an SSL certificate
     InvalidDNSNameError(String),
     /// Missing domain while it was explicitly asked to validate it
@@ -313,8 +357,7 @@ pub enum Error {
     CouldntLockReader,
     /// Broken IPC communication channel: the other thread probably has exited
     Mpsc,
-
-    #[cfg(feature = "use-rustls")]
+    #[cfg(any(feature = "use-rustls", feature = "use-rustls-ring"))]
     /// Could not create a rustls client connection
     CouldNotCreateConnection(rustls::Error),
 
@@ -338,10 +381,12 @@ impl Display for Error {
             Error::SslHandshakeError(e) => Display::fmt(e, f),
             #[cfg(feature = "use-openssl")]
             Error::InvalidSslMethod(e) => Display::fmt(e, f),
-            #[cfg(feature = "use-rustls")]
+            #[cfg(any(
+                feature = "use-rustls",
+                feature = "use-rustls-ring",
+            ))]
             Error::CouldNotCreateConnection(e) => Display::fmt(e, f),
 
-            Error::Message(e) => f.write_str(e),
             Error::InvalidDNSNameError(domain) => write!(f, "Invalid domain name {} not matching SSL certificate", domain),
             Error::AllAttemptsErrored(errors) => {
                 f.write_str("Made one or multiple attempts, all errored:\n")?;
@@ -351,8 +396,9 @@ impl Display for Error {
                 Ok(())
             }
 
-            Error::Protocol(e) => write!(f, "Electrum server error: {}", e.clone().take()),
-            Error::InvalidResponse(e) => write!(f, "Error during the deserialization of a response from the server: {}", e.clone().take()),
+            Error::JSONRpc(msg) => write!(f, "Invalid use of Electrum JSON-RPC: {msg}"),
+            Error::Protocol(err) => write!(f, "Electrum server returned an error: ({}) {}", err.code, err.message),
+            Error::InvalidResponse(e) => write!(f, "Error during the deserialization of a response from the server: {e}"),
 
             // TODO: Print out addresses once `ScriptHash` will implement `Display`
             Error::AlreadySubscribed(_) => write!(f, "Already subscribed to the notifications of an address"),

@@ -3,9 +3,9 @@
 //! This module contains the definition of the raw client that wraps the transport method
 
 use amplify::hex::{FromHex, ToHex};
-use bpstd::{BlockHeader, ConsensusDecode, ScriptPubkey, Txid};
+use bp::{BlockHash, BlockHeader, ConsensusDecode, ScriptPubkey, Tx, Txid};
 use std::borrow::Borrow;
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::mem::drop;
 use std::net::{TcpStream, ToSocketAddrs};
@@ -21,13 +21,14 @@ use log::{debug, error, info, trace, warn};
 use openssl::ssl::{SslConnector, SslMethod, SslStream, SslVerifyMode};
 
 #[cfg(all(
-    any(feature = "default", feature = "use-rustls"),
+    any(
+        feature = "default",
+        feature = "use-rustls",
+        feature = "use-rustls-ring"
+    ),
     not(feature = "use-openssl")
 ))]
-use rustls::{
-    pki_types::ServerName,
-    ClientConfig, ClientConnection, RootCertStore, StreamOwned,
-};
+use rustls::{pki_types::ServerName, ClientConfig, ClientConnection, RootCertStore, StreamOwned};
 
 #[cfg(any(feature = "default", feature = "proxy"))]
 use crate::socks::{Socks5Stream, TargetAddr, ToTargetAddr};
@@ -76,7 +77,7 @@ pub trait ToSocketAddrsDomain: ToSocketAddrs {
 
 impl ToSocketAddrsDomain for &str {
     fn domain(&self) -> Option<&str> {
-        self.splitn(2, ':').next()
+        self.split(':').next()
     }
 }
 
@@ -112,7 +113,7 @@ impl_to_socket_addrs_domain!((std::net::Ipv6Addr, u16));
 /// Instance of an Electrum client
 ///
 /// A `Client` maintains a constant connection with an Electrum server and exposes methods to
-/// interact with it. It can also subscribe and receive notifictations from the server about new
+/// interact with it. It can also subscribe and receive notifications from the server about new
 /// blocks or activity on a specific *scriptPubKey*.
 ///
 /// The `Client` is modeled in such a way that allows the external caller to have full control over
@@ -120,7 +121,7 @@ impl_to_socket_addrs_domain!((std::net::Ipv6Addr, u16));
 /// connection.
 ///
 /// More transport methods can be used by manually creating an instance of this struct with an
-/// arbitray `S` type.
+/// arbitrary `S` type.
 #[derive(Debug)]
 pub struct RawClient<S>
 where
@@ -283,28 +284,38 @@ impl RawClient<ElectrumSslStream> {
 }
 
 #[cfg(all(
-    any(feature = "default", feature = "use-rustls"),
+    any(
+        feature = "default",
+        feature = "use-rustls",
+        feature = "use-rustls-ring"
+    ),
     not(feature = "use-openssl")
 ))]
 mod danger {
     use crate::raw_client::ServerName;
-    use rustls::client::danger::ServerCertVerified;
-    use rustls::pki_types::CertificateDer;
-    use rustls::pki_types::UnixTime;
-    use rustls::Error;
+    use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified};
+    use rustls::crypto::CryptoProvider;
+    use rustls::pki_types::{CertificateDer, UnixTime};
+    use rustls::DigitallySignedStruct;
 
     #[derive(Debug)]
-    pub struct NoCertificateVerification {}
+    pub struct NoCertificateVerification(CryptoProvider);
+
+    impl NoCertificateVerification {
+        pub fn new(provider: CryptoProvider) -> Self {
+            Self(provider)
+        }
+    }
 
     impl rustls::client::danger::ServerCertVerifier for NoCertificateVerification {
         fn verify_server_cert(
             &self,
-            _end_entity: &CertificateDer,
-            _intermediates: &[CertificateDer],
-            _server_name: &ServerName,
-            _ocsp_response: &[u8],
+            _end_entity: &CertificateDer<'_>,
+            _intermediates: &[CertificateDer<'_>],
+            _server_name: &ServerName<'_>,
+            _ocsp: &[u8],
             _now: UnixTime,
-        ) -> Result<ServerCertVerified, Error> {
+        ) -> Result<ServerCertVerified, rustls::Error> {
             Ok(ServerCertVerified::assertion())
         }
 
@@ -312,34 +323,42 @@ mod danger {
             &self,
             _message: &[u8],
             _cert: &CertificateDer<'_>,
-            _dss: &rustls::DigitallySignedStruct,
-        ) -> Result<rustls::client::danger::HandshakeSignatureValid, Error> {
-            Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+            _dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
         }
 
         fn verify_tls13_signature(
             &self,
             _message: &[u8],
             _cert: &CertificateDer<'_>,
-            _dss: &rustls::DigitallySignedStruct,
-        ) -> Result<rustls::client::danger::HandshakeSignatureValid, Error> {
-            Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+            _dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
         }
 
         fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-            vec![]
+            self.0.signature_verification_algorithms.supported_schemes()
         }
     }
 }
 
 #[cfg(all(
-    any(feature = "default", feature = "use-rustls"),
+    any(
+        feature = "default",
+        feature = "use-rustls",
+        feature = "use-rustls-ring"
+    ),
     not(feature = "use-openssl")
 ))]
 /// Transport type used to establish a Rustls TLS encrypted/authenticated connection with the server
 pub type ElectrumSslStream = StreamOwned<ClientConnection, TcpStream>;
 #[cfg(all(
-    any(feature = "default", feature = "use-rustls"),
+    any(
+        feature = "default",
+        feature = "use-rustls",
+        feature = "use-rustls-ring"
+    ),
     not(feature = "use-openssl")
 ))]
 impl RawClient<ElectrumSslStream> {
@@ -387,7 +406,7 @@ impl RawClient<ElectrumSslStream> {
             socket_addr.domain().ok_or(Error::MissingDomain)?;
 
             let store = webpki_roots::TLS_SERVER_ROOTS
-                .into_iter()
+                .iter()
                 .cloned()
                 .collect::<RootCertStore>();
 
@@ -396,8 +415,11 @@ impl RawClient<ElectrumSslStream> {
         } else {
             builder
                 .dangerous()
-                .with_custom_certificate_verifier(std::sync::Arc::new(
-                    danger::NoCertificateVerification {},
+                .with_custom_certificate_verifier(Arc::new(
+                    #[cfg(feature = "use-rustls")]
+                    danger::NoCertificateVerification::new(rustls::crypto::aws_lc_rs::default_provider()),
+                    #[cfg(feature = "use-rustls-ring")]
+                    danger::NoCertificateVerification::new(rustls::crypto::ring::default_provider()),
                 ))
                 .with_no_client_auth()
         };
@@ -444,7 +466,11 @@ impl RawClient<ElectrumProxyStream> {
         Ok(stream.into())
     }
 
-    #[cfg(any(feature = "use-openssl", feature = "use-rustls"))]
+    #[cfg(any(
+        feature = "use-openssl",
+        feature = "use-rustls",
+        feature = "use-rustls-ring"
+    ))]
     /// Creates a new TLS client that connects to `target_addr` using `proxy_addr` as a socks proxy
     /// server. The DNS resolution of `target_addr`, if required, is done through the proxy. This
     /// allows to specify, for instance, `.onion` addresses.
@@ -503,11 +529,10 @@ impl<S: Read + Write> RawClient<S> {
 
                 if let Some(until_message) = until_message {
                     // If we are trying to start a reader thread but the corresponding sender is
-                    // missing from the map, exit immediately. This can happen with batch calls,
-                    // since the sender is shared for all the individual queries in a call. We
-                    // might have already received a response for that id, but we don't know it
-                    // yet. Exiting here forces the calling code to fallback to the sender-receiver
-                    // method, and it should find a message there waiting for it.
+                    // missing from the map, exit immediately. We might have already received a
+                    // response for that id, but we don't know it yet. Exiting here forces the
+                    // calling code to fallback to the sender-receiver method, and it should find
+                    // a message there waiting for it.
                     if self.waiting_map.lock()?.get(&until_message).is_none() {
                         return Err(Error::CouldntLockReader);
                     }
@@ -551,9 +576,8 @@ impl<S: Read + Write> RawClient<S> {
                             if let Some(err) = map.values().find_map(|sender| {
                                 sender
                                     .send(ChannelMessage::WakeUp)
-                                    .map_err(|err| {
+                                    .inspect_err(|_| {
                                         warn!("Unable to wake up a thread, trying some other");
-                                        err
                                     })
                                     .err()
                             }) {
@@ -578,7 +602,7 @@ impl<S: Read + Write> RawClient<S> {
                             // No id, that's probably a notification.
                             let mut resp = resp;
 
-                            if let Some(ref method) = resp["method"].take().as_str() {
+                            if let Some(method) = resp["method"].take().as_str() {
                                 self.handle_notification(method, resp["params"].take())?;
                             } else {
                                 warn!("Unexpected response: {:?}", resp);
@@ -597,7 +621,9 @@ impl<S: Read + Write> RawClient<S> {
 
         let resp = resp?;
         if let Some(err) = resp.get("error") {
-            Err(Error::Protocol(err.clone()))
+            let err = serde_json::from_value(err.clone())
+                .map_err(|_| Error::InvalidResponse(resp.clone()))?;
+            Err(Error::Protocol(err))
         } else {
             Ok(resp)
         }
@@ -639,7 +665,7 @@ impl<S: Read + Write> RawClient<S> {
     ) -> Result<serde_json::Value, Error> {
         loop {
             // Try to take the lock on the reader. If we manage to do so, we'll become the reader
-            // thread until we get our reponse
+            // thread until we get our response
             match self._reader_thread(Some(req_id)) {
                 Ok(response) => break Ok(response),
                 Err(Error::CouldntLockReader) => {
@@ -695,7 +721,7 @@ impl<S: Read + Write> RawClient<S> {
     ) -> Result<serde_json::Value, Error> {
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
-            &method_name,
+            method_name,
             params,
         );
         let result = self.call(req)?;
@@ -726,22 +752,23 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     fn batch_call(&self, batch: &Batch) -> Result<Vec<serde_json::Value>, Error> {
         let mut raw = Vec::new();
 
-        let mut missing_responses = BTreeSet::new();
+        let mut missing_responses = Vec::new();
         let mut answers = BTreeMap::new();
 
-        // Add our listener to the map before we send the request, Here we will clone the sender
-        // for every request id, so that we only have to monitor one receiver.
-        let (sender, receiver) = channel();
+        // Add our listener to the map before we send the request
 
         for (method, params) in batch.iter() {
             let req = Request::new_id(
                 self.last_id.fetch_add(1, Ordering::SeqCst),
-                &method,
+                method,
                 params.to_vec(),
             );
-            missing_responses.insert(req.id);
+            // Add distinct channel to each request so when we remove our request id (and sender) from the waiting_map
+            // we can be sure that the response gets sent to the correct channel in self.recv
+            let (sender, receiver) = channel();
+            missing_responses.push((req.id, receiver));
 
-            self.waiting_map.lock()?.insert(req.id, sender.clone());
+            self.waiting_map.lock()?.insert(req.id, sender);
 
             raw.append(&mut serde_json::to_vec(&req)?);
             raw.extend_from_slice(b"\n");
@@ -760,8 +787,8 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
 
         self.increment_calls();
 
-        for req_id in missing_responses.iter() {
-            match self.recv(&receiver, *req_id) {
+        for (req_id, receiver) in missing_responses.iter() {
+            match self.recv(receiver, *req_id) {
                 Ok(mut resp) => answers.insert(req_id, resp["result"].take()),
                 Err(e) => {
                     // In case of error our sender could still be left in the map, depending on where
@@ -769,7 +796,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
                     warn!("got error for req_id {}: {:?}", req_id, e);
                     warn!("removing all waiting req of this batch");
                     let mut guard = self.waiting_map.lock()?;
-                    for req_id in missing_responses.iter() {
+                    for (req_id, _) in missing_responses.iter() {
                         guard.remove(req_id);
                     }
                     return Err(e);
@@ -777,7 +804,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
             };
         }
 
-        Ok(answers.into_iter().map(|(_, r)| r).collect())
+        Ok(answers.into_values().collect())
     }
 
     fn block_headers_subscribe_raw(&self) -> Result<RawHeaderNotification, Error> {
@@ -872,7 +899,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
             "blockchain.scripthash.subscribe",
-            vec![Param::String(script_hash.to_hex())],
+            vec![Param::String(script_hash.as_hex())],
         );
         let value = self.call(req)?;
 
@@ -909,7 +936,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
             "blockchain.scripthash.unsubscribe",
-            vec![Param::String(script_hash.to_hex())],
+            vec![Param::String(script_hash.as_hex())],
         );
         let value = self.call(req)?;
         let answer = serde_json::from_value(value)?;
@@ -929,7 +956,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     }
 
     fn script_get_balance(&self, script: &ScriptPubkey) -> Result<GetBalanceRes, Error> {
-        let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
+        let params = vec![Param::String(script.to_electrum_scripthash().as_hex())];
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
             "blockchain.scripthash.get_balance",
@@ -948,7 +975,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     }
 
     fn script_get_history(&self, script: &ScriptPubkey) -> Result<Vec<GetHistoryRes>, Error> {
-        let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
+        let params = vec![Param::String(script.to_electrum_scripthash().as_hex())];
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
             "blockchain.scripthash.get_history",
@@ -967,7 +994,7 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
     }
 
     fn script_list_unspent(&self, script: &ScriptPubkey) -> Result<Vec<ListUnspentRes>, Error> {
-        let params = vec![Param::String(script.to_electrum_scripthash().to_hex())];
+        let params = vec![Param::String(script.to_electrum_scripthash().as_hex())];
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
             "blockchain.scripthash.listunspent",
@@ -995,20 +1022,90 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         impl_batch_call!(self, scripts, script_list_unspent)
     }
 
-    fn transaction_get_raw(&self, txid: &Txid) -> Result<Vec<u8>, Error> {
+    fn script_get_mempool(&self, script: &ScriptPubkey) -> Result<Vec<GetMempoolRes>, Error> {
+        let params = vec![Param::String(script.to_electrum_scripthash().as_hex())];
+        let req = Request::new_id(
+            self.last_id.fetch_add(1, Ordering::SeqCst),
+            "blockchain.scripthash.listunspent",
+            params,
+        );
+        let result = self.call(req)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    fn transaction_get_raw(&self, txid: &Txid) -> Result<Option<Vec<u8>>, Error> {
         let params = vec![Param::String(format!("{:x}", txid))];
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
             "blockchain.transaction.get",
             params,
         );
-        let result = self.call(req)?;
+        let result = match self.call(req) {
+            Ok(result) => result,
+            Err(Error::Protocol(_)) => return Ok(None),
+            Err(e) => Err(e)?,
+        };
 
-        Ok(Vec::<u8>::from_hex(
+        Ok(Some(Vec::<u8>::from_hex(
             result
                 .as_str()
                 .ok_or_else(|| Error::InvalidResponse(result.clone()))?,
-        )?)
+        )?))
+    }
+
+    fn transaction_get_verbose(&self, txid: &Txid) -> Result<Option<TxRes>, Error> {
+        let params = vec![Param::String(format!("{:x}", txid)), Param::Bool(true)];
+        let req = Request::new_id(
+            self.last_id.fetch_add(1, Ordering::SeqCst),
+            "blockchain.transaction.get",
+            params,
+        );
+        let result = match self.call(req) {
+            Ok(result) => result,
+            Err(Error::Protocol(_)) => return Ok(None),
+            Err(e) => Err(e)?,
+        };
+
+        let confirmations = result
+            .get("confirmations")
+            .map(|v| {
+                v.as_u64()
+                    .map(u32::try_from)
+                    .transpose()
+                    .ok()
+                    .flatten()
+                    .ok_or_else(|| Error::InvalidResponse(v.clone()))
+            })
+            .transpose()?
+            .unwrap_or_default();
+        let block_hash = result
+            .get("blockhash")
+            .map(|hex| {
+                let s = hex
+                    .as_str()
+                    .ok_or_else(|| Error::InvalidResponse(hex.clone()))?;
+                let data = Vec::<u8>::from_hex(s)?;
+                Result::<_, Error>::Ok(BlockHash::consensus_deserialize(data)?)
+            })
+            .transpose()?;
+        let time = result
+            .get("blocktime")
+            .map(|v| v.as_u64().ok_or_else(|| Error::InvalidResponse(v.clone())))
+            .transpose()?;
+        let tx = Vec::<u8>::from_hex(
+            result
+                .get("hex")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| Error::InvalidResponse(result.clone()))?,
+        )?;
+        let tx = Tx::consensus_deserialize(tx)?;
+
+        Ok(Some(TxRes {
+            confirmations,
+            block_hash,
+            time,
+            tx,
+        }))
     }
 
     fn batch_transaction_get_raw<'t, I>(&self, txids: I) -> Result<Vec<Vec<u8>>, Error>
@@ -1068,6 +1165,38 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
         Ok(serde_json::from_value(result)?)
     }
 
+    fn txid_from_pos(&self, height: usize, tx_pos: usize) -> Result<Txid, Error> {
+        let params = vec![Param::Usize(height), Param::Usize(tx_pos)];
+        let req = Request::new_id(
+            self.last_id.fetch_add(1, Ordering::SeqCst),
+            "blockchain.transaction.id_from_pos",
+            params,
+        );
+        let result = self.call(req)?;
+
+        Ok(serde_json::from_value(result)?)
+    }
+
+    fn txid_from_pos_with_merkle(
+        &self,
+        height: usize,
+        tx_pos: usize,
+    ) -> Result<TxidFromPosRes, Error> {
+        let params = vec![
+            Param::Usize(height),
+            Param::Usize(tx_pos),
+            Param::Bool(true),
+        ];
+        let req = Request::new_id(
+            self.last_id.fetch_add(1, Ordering::SeqCst),
+            "blockchain.transaction.id_from_pos",
+            params,
+        );
+        let result = self.call(req)?;
+
+        Ok(serde_json::from_value(result)?)
+    }
+
     fn server_features(&self) -> Result<ServerFeaturesRes, Error> {
         let req = Request::new_id(
             self.last_id.fetch_add(1, Ordering::SeqCst),
@@ -1098,7 +1227,8 @@ impl<T: Read + Write> ElectrumApi for RawClient<T> {
 
 #[cfg(test)]
 mod test {
-    use bpstd::{Address, TxVer};
+    use bp::TxVer;
+    use invoice::Address;
     use std::str::FromStr;
 
     use super::*;
@@ -1124,6 +1254,26 @@ mod test {
         assert_eq!(resp.hash_function, Some("sha256".into()));
         assert_eq!(resp.pruning, None);
     }
+
+    #[test]
+    #[ignore = "depends on a live server"]
+    fn test_batch_response_ordering() {
+        // The electrum.blockstream.info:50001 node always sends back ordered responses which will make this always pass.
+        // However, many servers do not, so we use one of those servers for this test.
+        let client = RawClient::new("exs.dyshek.org:50001", None).unwrap();
+        let heights: Vec<u32> = vec![1, 4, 8, 12, 222, 6666, 12];
+        let result_times = [
+            1231469665, 1231470988, 1231472743, 1231474888, 1231770653, 1236456633, 1231474888,
+        ];
+        // Check ordering 10 times. This usually fails within 5 if ordering is incorrect.
+        for _ in 0..10 {
+            let results = client.batch_block_header(&heights).unwrap();
+            for (index, result) in results.iter().enumerate() {
+                assert_eq!(result_times[index], result.time);
+            }
+        }
+    }
+
     #[test]
     fn test_relay_fee() {
         let client = RawClient::new(get_test_server(), None).unwrap();
@@ -1264,6 +1414,7 @@ mod test {
                 &Txid::from_str("cc2ca076fd04c2aeed6d02151c447ced3d09be6fb4d4ef36cb5ed4e7a3260566")
                     .unwrap(),
             )
+            .unwrap()
             .unwrap();
         assert_eq!(resp.version, TxVer::V1);
         assert_eq!(resp.lock_time.to_consensus_u32(), 0);
@@ -1281,7 +1432,7 @@ mod test {
             .unwrap();
         assert_eq!(
             resp,
-            vec![
+            Some(vec![
                 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255, 84, 3, 240, 156, 9, 27, 77,
                 105, 110, 101, 100, 32, 98, 121, 32, 65, 110, 116, 80, 111, 111, 108, 49, 49, 57,
@@ -1297,7 +1448,7 @@ mod test {
                 211, 234, 106, 41, 76, 223, 58, 4, 46, 151, 48, 9, 88, 68, 112, 161, 41, 22, 17,
                 30, 44, 170, 1, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-            ]
+            ])
         )
     }
 
@@ -1342,6 +1493,35 @@ mod test {
             &fail_block_header.merkle_root,
             &resp
         ));
+    }
+
+    #[test]
+    fn test_txid_from_pos() {
+        let client = RawClient::new(get_test_server(), None).unwrap();
+
+        let txid =
+            Txid::from_str("1f7ff3c407f33eabc8bec7d2cc230948f2249ec8e591bcf6f971ca9366c8788d")
+                .unwrap();
+        let resp = client.txid_from_pos(630000, 68).unwrap();
+        assert_eq!(resp, txid);
+    }
+
+    #[test]
+    fn test_txid_from_pos_with_merkle() {
+        let client = RawClient::new(get_test_server(), None).unwrap();
+
+        let txid =
+            Txid::from_str("1f7ff3c407f33eabc8bec7d2cc230948f2249ec8e591bcf6f971ca9366c8788d")
+                .unwrap();
+        let resp = client.txid_from_pos_with_merkle(630000, 68).unwrap();
+        assert_eq!(resp.tx_hash, txid);
+        assert_eq!(
+            resp.merkle[0],
+            [
+                34, 65, 51, 64, 49, 139, 115, 189, 185, 246, 70, 225, 168, 193, 217, 195, 47, 66,
+                179, 240, 153, 24, 114, 215, 144, 196, 212, 41, 39, 155, 246, 25
+            ]
+        );
     }
 
     #[test]

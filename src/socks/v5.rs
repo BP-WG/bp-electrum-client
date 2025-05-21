@@ -37,10 +37,7 @@ fn read_addr<R: Read>(socket: &mut R) -> io::Result<TargetAddr> {
                 ip, port, 0, 0,
             ))))
         }
-        _ => Err(io::Error::new(
-            io::ErrorKind::Other,
-            "unsupported address type",
-        )),
+        _ => Err(io::Error::other("unsupported address type")),
     }
 }
 
@@ -54,35 +51,15 @@ fn read_response(socket: &mut TcpStream) -> io::Result<TargetAddr> {
 
     match socket.read_u8()? {
         0 => {}
-        1 => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "general SOCKS server failure",
-            ))
-        }
-        2 => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "connection not allowed by ruleset",
-            ))
-        }
-        3 => return Err(io::Error::new(io::ErrorKind::Other, "network unreachable")),
-        4 => return Err(io::Error::new(io::ErrorKind::Other, "host unreachable")),
-        5 => return Err(io::Error::new(io::ErrorKind::Other, "connection refused")),
-        6 => return Err(io::Error::new(io::ErrorKind::Other, "TTL expired")),
-        7 => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "command not supported",
-            ))
-        }
-        8 => {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "address kind not supported",
-            ))
-        }
-        _ => return Err(io::Error::new(io::ErrorKind::Other, "unknown error")),
+        1 => return Err(io::Error::other("general SOCKS server failure")),
+        2 => return Err(io::Error::other("connection not allowed by ruleset")),
+        3 => return Err(io::Error::other("network unreachable")),
+        4 => return Err(io::Error::other("host unreachable")),
+        5 => return Err(io::Error::other("connection refused")),
+        6 => return Err(io::Error::other("TTL expired")),
+        7 => return Err(io::Error::other("command not supported")),
+        8 => return Err(io::Error::other("address kind not supported")),
+        _ => return Err(io::Error::other("unknown error")),
     }
 
     if socket.read_u8()? != 0 {
@@ -110,7 +87,7 @@ fn write_addr(mut packet: &mut [u8], target: &TargetAddr) -> io::Result<usize> {
         }
         TargetAddr::Domain(ref domain, port) => {
             packet.write_u8(3).unwrap();
-            if domain.len() > u8::max_value() as usize {
+            if domain.len() > u8::MAX as usize {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
                     "domain name too long",
@@ -135,7 +112,7 @@ enum Authentication<'a> {
     None,
 }
 
-impl<'a> Authentication<'a> {
+impl Authentication<'_> {
     fn id(&self) -> u8 {
         match *self {
             Authentication::Password { .. } => 2,
@@ -144,11 +121,7 @@ impl<'a> Authentication<'a> {
     }
 
     fn is_no_auth(&self) -> bool {
-        if let Authentication::None = *self {
-            true
-        } else {
-            false
-        }
+        matches!(*self, Authentication::None)
     }
 }
 
@@ -231,14 +204,11 @@ impl Socks5Stream {
         }
 
         if selected_method == 0xff {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "no acceptable auth methods",
-            ));
+            return Err(io::Error::other("no acceptable auth methods"));
         }
 
         if selected_method != auth.id() && selected_method != Authentication::None.id() {
-            return Err(io::Error::new(io::ErrorKind::Other, "unknown auth method"));
+            return Err(io::Error::other("unknown auth method"));
         }
 
         match *auth {
@@ -257,10 +227,7 @@ impl Socks5Stream {
 
         let proxy_addr = read_response(&mut socket)?;
 
-        Ok(Socks5Stream {
-            socket: socket,
-            proxy_addr: proxy_addr,
-        })
+        Ok(Socks5Stream { socket, proxy_addr })
     }
 
     fn password_authentication(
@@ -268,13 +235,13 @@ impl Socks5Stream {
         username: &str,
         password: &str,
     ) -> io::Result<()> {
-        if username.len() < 1 || username.len() > 255 {
+        if username.is_empty() || username.len() > 255 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "invalid username",
             ));
         };
-        if password.len() < 1 || password.len() > 255 {
+        if password.is_empty() || password.len() > 255 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "invalid password",
@@ -336,7 +303,7 @@ impl Read for Socks5Stream {
     }
 }
 
-impl<'a> Read for &'a Socks5Stream {
+impl Read for &Socks5Stream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         (&self.socket).read(buf)
     }
@@ -352,7 +319,7 @@ impl Write for Socks5Stream {
     }
 }
 
-impl<'a> Write for &'a Socks5Stream {
+impl Write for &Socks5Stream {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         (&self.socket).write(buf)
     }
@@ -474,10 +441,7 @@ impl Socks5Datagram {
         let socket = UdpSocket::bind(addr)?;
         socket.connect(&stream.proxy_addr)?;
 
-        Ok(Socks5Datagram {
-            socket: socket,
-            stream: stream,
-        })
+        Ok(Socks5Datagram { socket, stream })
     }
 
     /// Like `UdpSocket::send_to`.
@@ -526,11 +490,7 @@ impl Socks5Datagram {
         let addr = read_addr(&mut header)?;
 
         unsafe {
-            ptr::copy(
-                buf.as_ptr(),
-                buf.as_mut_ptr().offset(header.len() as isize),
-                overflow,
-            );
+            ptr::copy(buf.as_ptr(), buf.as_mut_ptr().add(header.len()), overflow);
         }
         buf[..header.len()].copy_from_slice(header);
 
